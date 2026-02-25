@@ -58,6 +58,7 @@ func run(w *app.Window) error {
 	th.TextSize = unit.Sp(14)
 
 	es := NewEditorState()
+	registerWebCallbacks(es, w)
 	expl := explorer.NewExplorer(w)
 	gutterRatio := 1.0 / 3.0 // right gutter as fraction of window width
 	rightGutterWidth := 0
@@ -152,6 +153,7 @@ func run(w *app.Window) error {
 						key.Filter{Required: key.ModShortcut, Name: "S"},
 						key.Filter{Required: key.ModShortcut, Name: "="},
 						key.Filter{Required: key.ModShortcut, Name: "-"},
+						key.Filter{Required: key.ModShortcut, Name: "A"},
 					)
 					if !ok {
 						break
@@ -186,6 +188,8 @@ func run(w *app.Window) error {
 							if th.TextSize > unit.Sp(8) {
 								th.TextSize -= unit.Sp(2)
 							}
+						case "A": // Cmd+A / Ctrl+A: select all
+							es.Editor.SetCaret(es.Editor.Len(), 0)
 						}
 					}
 				}

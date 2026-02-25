@@ -106,6 +106,7 @@ nav button.active {
 <nav>
   <button class="active" onclick="showTab('calc')">Calculator</button>
   <button onclick="showTab('lang')">Language</button>
+  <button onclick="shareLink()">Share</button>
   <button onclick="window.open('https://github.com/szatmary/ratcalc','_blank')">GitHub</button>
 </nav>
 <div id="giowindow"></div>
@@ -125,18 +126,50 @@ fetch('LANGUAGE.md')
   .then(md => { document.getElementById('lang-content').innerHTML = marked.parse(md); });
 </script>
 <script>
-// Prevent browser from consuming keyboard shortcuts that Gio needs
+// --- Keyboard shortcut handling ---
+// Gio on WASM maps Ctrl (not Cmd/Meta) to ModShortcut. macOS browser
+// users press Cmd for shortcuts. We intercept in the capturing phase,
+// prevent browser defaults, and for Cmd+key re-dispatch as Ctrl+key
+// so Gio recognizes them. Paste is handled entirely in JS.
+var shortcutKeys = ['a','c','x','z','y','s','o'];
+var shortcutSymbols = ['=','-','+'];
+
 document.addEventListener('keydown', function(e) {
   if (document.getElementById('tab-lang').style.display !== 'none') return;
   var mod = e.ctrlKey || e.metaKey;
-  if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'y' ||
-              e.key === 's' || e.key === 'o' || e.key === '=' || e.key === '-')) {
+  if (!mod) return;
+  var k = e.key.toLowerCase();
+  var input = document.querySelector('#giowindow input');
+
+  // Handle paste entirely in JS (Gio's Clipboard API call fails on web)
+  if (k === 'v') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    navigator.clipboard.readText().then(function(text) {
+      if (!text || !input) return;
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }).catch(function() {});
+    return;
+  }
+
+  // Prevent browser defaults for our shortcuts
+  if (shortcutKeys.includes(k) || shortcutSymbols.includes(e.key)) {
     e.preventDefault();
   }
-});
-// Gio uses navigator.clipboard.readText() for paste, which browsers
-// often block. Intercept the paste event and feed the text directly
-// into Gio's hidden input element.
+
+  // Convert Cmd+key to Ctrl+key so Gio sees ModShortcut
+  if (e.metaKey && !e.ctrlKey && input) {
+    e.stopImmediatePropagation();
+    input.dispatchEvent(new KeyboardEvent('keydown', {
+      key: e.key, code: e.code,
+      ctrlKey: true, shiftKey: e.shiftKey, altKey: e.altKey,
+      bubbles: true, cancelable: true,
+    }));
+  }
+}, true);
+
+// Fallback paste handler for right-click paste
 document.addEventListener('paste', function(e) {
   if (document.getElementById('tab-lang').style.display !== 'none') return;
   var text = (e.clipboardData || window.clipboardData).getData('text');
@@ -146,17 +179,81 @@ document.addEventListener('paste', function(e) {
     input.value = text;
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
+  e.stopImmediatePropagation();
   e.preventDefault();
-  e.stopPropagation();
 }, true);
+
+// --- Share link ---
+function base64urlEncode(data) {
+  var binary = '';
+  for (var i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function base64urlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  var binary = atob(str);
+  var data = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
+  return data;
+}
+async function compress(text) {
+  var cs = new CompressionStream('deflate-raw');
+  var writer = cs.writable.getWriter();
+  writer.write(new TextEncoder().encode(text));
+  writer.close();
+  var chunks = [], reader = cs.readable.getReader();
+  while (true) {
+    var r = await reader.read();
+    if (r.done) break;
+    chunks.push(r.value);
+  }
+  var len = chunks.reduce(function(a, c) { return a + c.length; }, 0);
+  var out = new Uint8Array(len), off = 0;
+  chunks.forEach(function(c) { out.set(c, off); off += c.length; });
+  return out;
+}
+async function decompress(data) {
+  var ds = new DecompressionStream('deflate-raw');
+  var writer = ds.writable.getWriter();
+  writer.write(data);
+  writer.close();
+  var chunks = [], reader = ds.readable.getReader();
+  while (true) {
+    var r = await reader.read();
+    if (r.done) break;
+    chunks.push(r.value);
+  }
+  var len = chunks.reduce(function(a, c) { return a + c.length; }, 0);
+  var out = new Uint8Array(len), off = 0;
+  chunks.forEach(function(c) { out.set(c, off); off += c.length; });
+  return new TextDecoder().decode(out);
+}
+async function shareLink() {
+  if (typeof getEditorText !== 'function') return;
+  var text = getEditorText();
+  if (!text) return;
+  var compressed = await compress(text);
+  var encoded = base64urlEncode(compressed);
+  var url = window.location.origin + window.location.pathname + '?t=' + encoded;
+  await navigator.clipboard.writeText(url);
+  alert('Link copied to clipboard');
+}
 </script>
 <script src="wasm_exec.js"></script>
 <script>
-(async () => {
-  const go = new Go();
-  const result = await WebAssembly.instantiateStreaming(
-    fetch("ratcalc.wasm"),
-    go.importObject
+// Decode URL parameter before WASM loads so Go can read it on init
+(async function() {
+  var params = new URLSearchParams(window.location.search);
+  var encoded = params.get('t');
+  if (encoded) {
+    try {
+      window._initialText = await decompress(base64urlDecode(encoded));
+    } catch(e) { console.error('Failed to decode shared text:', e); }
+  }
+  var go = new Go();
+  var result = await WebAssembly.instantiateStreaming(
+    fetch("ratcalc.wasm"), go.importObject
   );
   go.run(result.instance);
 })();
