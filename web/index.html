@@ -134,6 +134,21 @@ document.addEventListener('keydown', function(e) {
     e.preventDefault();
   }
 });
+// Gio uses navigator.clipboard.readText() for paste, which browsers
+// often block. Intercept the paste event and feed the text directly
+// into Gio's hidden input element.
+document.addEventListener('paste', function(e) {
+  if (document.getElementById('tab-lang').style.display !== 'none') return;
+  var text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text) return;
+  var input = document.querySelector('#giowindow input');
+  if (input) {
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  e.preventDefault();
+  e.stopPropagation();
+}, true);
 </script>
 <script src="wasm_exec.js"></script>
 <script>

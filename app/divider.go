@@ -13,10 +13,8 @@ import (
 
 // DragDivider is a draggable vertical divider that resizes the right gutter.
 type DragDivider struct {
-	dragging   bool
-	startX     float32
-	startWidth int
-	tag        bool
+	dragging bool
+	tag      bool
 }
 
 var dividerColor = color.NRGBA{R: 0x40, G: 0x40, B: 0x40, A: 0xFF}
@@ -27,8 +25,9 @@ const minGutterWidth = 80
 const maxGutterWidth = 600
 
 // Layout renders the drag handle and processes pointer events.
-// It mutates *width based on drag deltas.
-func (d *DragDivider) Layout(gtx layout.Context, width *int) layout.Dimensions {
+// It mutates *width based on drag deltas. windowW is the total
+// window width, used to compute stable absolute pointer positions.
+func (d *DragDivider) Layout(gtx layout.Context, width *int, windowW int) layout.Dimensions {
 	height := gtx.Constraints.Max.Y
 
 	// Process pointer events
@@ -44,12 +43,12 @@ func (d *DragDivider) Layout(gtx layout.Context, width *int) layout.Dimensions {
 			switch pe.Kind {
 			case pointer.Press:
 				d.dragging = true
-				d.startX = pe.Position.X
-				d.startWidth = *width
 			case pointer.Drag:
 				if d.dragging {
-					delta := int(pe.Position.X - d.startX)
-					newWidth := d.startWidth - delta
+					// Compute pointer's absolute X from its position relative
+					// to the divider. The divider sits at windowW - *width - dividerWidthPx.
+					absX := float32(windowW-*width-dividerWidthPx) + pe.Position.X
+					newWidth := windowW - int(absX) - dividerWidthPx/2
 					if newWidth < minGutterWidth {
 						newWidth = minGutterWidth
 					}

@@ -264,7 +264,7 @@ func run(w *app.Window) error {
 						return layoutEditor(gtx, th, es)
 					}),
 					layout.Rigid(func(gtx C) D {
-						return divider.Layout(gtx, &rightGutterWidth)
+						return divider.Layout(gtx, &rightGutterWidth, windowW)
 					}),
 					layout.Rigid(func(gtx C) D {
 						return LayoutRightGutter(gtx, th, results, scrollY, lineHeight, topPad, rightGutterWidth)
