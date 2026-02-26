@@ -538,7 +538,7 @@ func parseAtLiteral(lit string) (Node, error) {
 			args = append(args, intNode(timeParts[0]), intNode(timeParts[1]), intNode(timeParts[2]))
 		}
 
-		var node Node = &FuncCall{Name: "Date", Args: args}
+		var node Node = &FuncCall{Name: "date", Args: args}
 		// Adjust for timezone offset: the components are in the given offset,
 		// but Date() treats them as UTC, so subtract the offset.
 		if offsetSeconds != 0 {
@@ -561,13 +561,13 @@ func parseAtLiteral(lit string) (Node, error) {
 		if len(timeParts) == 3 {
 			args = append(args, intNode(timeParts[2]))
 		}
-		return &FuncCall{Name: "Time", Args: args}, nil
+		return &FuncCall{Name: "time", Args: args}, nil
 	}
 
 	// Fallback: plain digits → unix timestamp
 	r := new(big.Rat)
 	r.SetString(raw)
-	return &FuncCall{Name: "Unix", Args: []Node{&NumberLit{Value: r}}}, nil
+	return &FuncCall{Name: "unix", Args: []Node{&NumberLit{Value: r}}}, nil
 }
 
 func intNode(s string) Node {

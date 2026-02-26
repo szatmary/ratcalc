@@ -2,8 +2,15 @@ package lang
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"time"
+)
+
+var (
+	piRat = new(big.Rat).SetFloat64(math.Pi)
+	eRat  = new(big.Rat).SetFloat64(math.E)
+	cRat = new(big.Rat).SetInt64(299792458) // speed of light in m/s
 )
 
 // Env is the variable environment mapping names to values.
@@ -32,6 +39,15 @@ func Eval(node Node, env Env) (Value, error) {
 			// Try looking up as a unit — bare unit word implies 1
 			if u := LookupUnit(n.Name); u != nil {
 				return Value{Rat: new(big.Rat).SetInt64(1), Unit: SimpleUnit(u)}, nil
+			}
+			// Built-in constants
+			switch n.Name {
+			case "pi":
+				return Value{Rat: new(big.Rat).Set(piRat), Base: 10}, nil
+			case "e":
+				return Value{Rat: new(big.Rat).Set(eRat), Base: 10}, nil
+			case "c":
+				return Value{Rat: new(big.Rat).Set(cRat), Base: 10}, nil
 			}
 			return Value{}, &EvalError{Msg: "undefined variable: " + n.Name}
 		}
@@ -205,18 +221,89 @@ func evalTZExpr(n *TZExpr, env Env) (Value, error) {
 	return val, nil
 }
 
+func evalMathFunc1(n *FuncCall, env Env, fn func(float64) float64) (Value, error) {
+	if len(n.Args) != 1 {
+		return Value{}, &EvalError{Msg: n.Name + "() takes 1 argument"}
+	}
+	val, err := Eval(n.Args[0], env)
+	if err != nil {
+		return Value{}, err
+	}
+	if val.Unit != nil {
+		return Value{}, &EvalError{Msg: n.Name + "() requires a dimensionless value"}
+	}
+	if val.IsTime {
+		return Value{}, &EvalError{Msg: n.Name + "() cannot operate on time values"}
+	}
+	f, _ := val.Rat.Float64()
+	result := fn(f)
+	r := new(big.Rat).SetFloat64(result)
+	if r == nil {
+		return Value{}, &EvalError{Msg: n.Name + "(): result out of range"}
+	}
+	return Value{Rat: r, Base: 10}, nil
+}
+
+func evalMathFunc2(n *FuncCall, env Env, fn func(float64, float64) float64) (Value, error) {
+	if len(n.Args) != 2 {
+		return Value{}, &EvalError{Msg: n.Name + "() takes 2 arguments"}
+	}
+	a, err := Eval(n.Args[0], env)
+	if err != nil {
+		return Value{}, err
+	}
+	b, err := Eval(n.Args[1], env)
+	if err != nil {
+		return Value{}, err
+	}
+	if a.Unit != nil || a.IsTime {
+		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
+	}
+	if b.Unit != nil || b.IsTime {
+		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
+	}
+	af, _ := a.Rat.Float64()
+	bf, _ := b.Rat.Float64()
+	result := fn(af, bf)
+	r := new(big.Rat).SetFloat64(result)
+	if r == nil {
+		return Value{}, &EvalError{Msg: n.Name + "(): result out of range"}
+	}
+	return Value{Rat: r, Base: 10}, nil
+}
+
+func evalTimeExtract(n *FuncCall, env Env, extract func(time.Time) int) (Value, error) {
+	if len(n.Args) != 1 {
+		return Value{}, &EvalError{Msg: n.Name + "() takes 1 argument"}
+	}
+	val, err := Eval(n.Args[0], env)
+	if err != nil {
+		return Value{}, err
+	}
+	if !val.IsTime {
+		return Value{}, &EvalError{Msg: n.Name + "() requires a time value"}
+	}
+	unix := val.Rat.Num().Int64() / val.Rat.Denom().Int64()
+	loc := time.UTC
+	if val.TZ != nil {
+		loc = val.TZ
+	}
+	t := time.Unix(unix, 0).In(loc)
+	return Value{Rat: new(big.Rat).SetInt64(int64(extract(t)))}, nil
+}
+
 func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 	switch n.Name {
-	case "Now":
+	case "now":
 		if len(n.Args) != 0 {
-			return Value{}, &EvalError{Msg: "Now() takes no arguments"}
+			return Value{}, &EvalError{Msg: "now() takes no arguments"}
 		}
 		r := new(big.Rat).SetInt64(time.Now().Unix())
 		return Value{Rat: r, IsTime: true}, nil
 
-	case "Date":
+	case "date":
 		if len(n.Args) != 3 && len(n.Args) != 6 {
-			return Value{}, &EvalError{Msg: "Date() takes 3 or 6 arguments"}
+			return Value{}, &EvalError{Msg: "date() takes 3 or 6 arguments"}
 		}
 		vals := make([]int, len(n.Args))
 		for i, arg := range n.Args {
@@ -225,7 +312,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 				return Value{}, err
 			}
 			if !v.Rat.IsInt() {
-				return Value{}, &EvalError{Msg: "Date() arguments must be integers"}
+				return Value{}, &EvalError{Msg: "date() arguments must be integers"}
 			}
 			vals[i] = int(v.Rat.Num().Int64())
 		}
@@ -238,9 +325,9 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 		r := new(big.Rat).SetInt64(t.Unix())
 		return Value{Rat: r, IsTime: true}, nil
 
-	case "Time":
+	case "time":
 		if len(n.Args) != 2 && len(n.Args) != 3 {
-			return Value{}, &EvalError{Msg: "Time() takes 2 or 3 arguments"}
+			return Value{}, &EvalError{Msg: "time() takes 2 or 3 arguments"}
 		}
 		vals := make([]int, len(n.Args))
 		for i, arg := range n.Args {
@@ -249,7 +336,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 				return Value{}, err
 			}
 			if !v.Rat.IsInt() {
-				return Value{}, &EvalError{Msg: "Time() arguments must be integers"}
+				return Value{}, &EvalError{Msg: "time() arguments must be integers"}
 			}
 			vals[i] = int(v.Rat.Num().Int64())
 		}
@@ -301,19 +388,70 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 		}
 		return Value{Rat: new(big.Rat).Set(val.Rat), Unit: val.Unit, Base: base}, nil
 
-	case "Unix":
+	case "unix":
 		if len(n.Args) != 1 {
-			return Value{}, &EvalError{Msg: "Unix() takes 1 argument"}
+			return Value{}, &EvalError{Msg: "unix() takes 1 argument"}
 		}
 		val, err := Eval(n.Args[0], env)
 		if err != nil {
 			return Value{}, err
 		}
 		if val.Unit != nil {
-			return Value{}, &EvalError{Msg: "Unix() value must be dimensionless"}
+			return Value{}, &EvalError{Msg: "unix() value must be dimensionless"}
 		}
 		r := autoDetectUnixPrecision(val.Rat)
 		return Value{Rat: r, IsTime: true}, nil
+
+	case "sin":
+		return evalMathFunc1(n, env, math.Sin)
+	case "cos":
+		return evalMathFunc1(n, env, math.Cos)
+	case "tan":
+		return evalMathFunc1(n, env, math.Tan)
+	case "asin":
+		return evalMathFunc1(n, env, math.Asin)
+	case "acos":
+		return evalMathFunc1(n, env, math.Acos)
+	case "atan":
+		return evalMathFunc1(n, env, math.Atan)
+	case "sqrt":
+		return evalMathFunc1(n, env, math.Sqrt)
+	case "abs":
+		return evalMathFunc1(n, env, math.Abs)
+	case "log":
+		return evalMathFunc1(n, env, math.Log10)
+	case "ln":
+		return evalMathFunc1(n, env, math.Log)
+	case "ceil":
+		return evalMathFunc1(n, env, math.Ceil)
+	case "floor":
+		return evalMathFunc1(n, env, math.Floor)
+	case "round":
+		return evalMathFunc1(n, env, math.Round)
+
+	case "pow":
+		return evalMathFunc2(n, env, math.Pow)
+	case "mod":
+		return evalMathFunc2(n, env, math.Mod)
+	case "atan2":
+		return evalMathFunc2(n, env, math.Atan2)
+	case "min":
+		return evalMathFunc2(n, env, math.Min)
+	case "max":
+		return evalMathFunc2(n, env, math.Max)
+
+	case "year":
+		return evalTimeExtract(n, env, func(t time.Time) int { return t.Year() })
+	case "month":
+		return evalTimeExtract(n, env, func(t time.Time) int { return int(t.Month()) })
+	case "day":
+		return evalTimeExtract(n, env, func(t time.Time) int { return t.Day() })
+	case "hour":
+		return evalTimeExtract(n, env, func(t time.Time) int { return t.Hour() })
+	case "minute":
+		return evalTimeExtract(n, env, func(t time.Time) int { return t.Minute() })
+	case "second":
+		return evalTimeExtract(n, env, func(t time.Time) int { return t.Second() })
 
 	default:
 		return Value{}, &EvalError{Msg: "unknown function: " + n.Name}

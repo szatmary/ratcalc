@@ -1,8 +1,8 @@
 # Ratcalc Language Specification
 
 Ratcalc is a line-by-line calculator. Each line is an independent expression or
-assignment, evaluated using exact rational arithmetic (`math/big.Rat`). Results
-appear in the right gutter.
+assignment, evaluated using exact rational arithmetic. Results appear in the
+right gutter.
 
 ## Grammar
 
@@ -75,7 +75,7 @@ AM/PM is consumed before timezone, so `3:30 PM PST` works as expected.
 ## Types
 
 ### Rational Numbers
-All numbers are exact rationals (`math/big.Rat`). Literals:
+All numbers are exact rationals. Literals:
 
 - Integer: `42`, `-7`
 - Hex: `0xFF`, `0x1A3` (case-insensitive prefix and digits)
@@ -85,40 +85,39 @@ All numbers are exact rationals (`math/big.Rat`). Literals:
 - Fraction: `1/3`, `22/7`
 
 ### Time Values
-A value may be a **time** (unix timestamp). When `IsTime` is true, the rational
-number holds unix seconds and the unit is nil. Time is NOT a unit category —
-it's a flag on the value to avoid compound-unit complications.
+A value may be a **time** (unix timestamp internally stored as seconds). Time is
+a distinct value type — not a unit category.
 
 **Creating time values:**
-- `Date(y, m, d)` — date at midnight UTC
-- `Date(y, m, d, h, min, s)` — date with time, UTC
-- `Time(h, m)` or `Time(h, m, s)` — time-of-day today, UTC
-- `@2024-01-31` — sugar for `Date(2024, 1, 31)`
-- `@2024-01-31T10:30:00` — sugar for `Date(2024, 1, 31, 10, 30, 0)`
+- `date(y, m, d)` — date at midnight UTC
+- `date(y, m, d, h, min, s)` — date with time, UTC
+- `time(h, m)` or `time(h, m, s)` — time-of-day today, UTC
+- `@2024-01-31` — sugar for `date(2024, 1, 31)`
+- `@2024-01-31T10:30:00` — sugar for `date(2024, 1, 31, 10, 30, 0)`
 - `@2024-01-31 10:30:00` — same (space instead of `T`)
 - `@2024-01-31 10:30:00 +0530` — datetime with UTC offset
 - `@2024-01-31 10:30:00 PST` — datetime with named timezone (postfix)
-- `@14:30` — sugar for `Time(14, 30)`
-- `@14:30:00` — sugar for `Time(14, 30, 0)`
-- `@1706745600` — sugar for `Unix(1706745600)`
+- `@14:30` — sugar for `time(14, 30)`
+- `@14:30:00` — sugar for `time(14, 30, 0)`
+- `@1706745600` — sugar for `unix(1706745600)`
 - Time-of-day literal: `12:00` or `14:30:00` (today's date in UTC)
-- `Unix(n)` — interprets number as unix timestamp, auto-detects precision:
+- `unix(n)` — interprets number as unix timestamp, auto-detects precision:
   - `< 1e12` → seconds
   - `< 1e15` → milliseconds (÷1000)
   - `< 1e18` → microseconds (÷1e6)
   - `≥ 1e18` → nanoseconds (÷1e9)
-- `Now()` — returns current time, updates every second
+- `now()` — returns current time, updates every second
 
 **Timezones:**
 
 A timezone abbreviation can follow a time-producing expression as a postfix
 (`12:00 PST`) to indicate the input timezone, or appear after `to` to convert
-display (`Now() to EST`).
+display (`now() to EST`).
 
 Postfix (input timezone): `12:00 PST` means noon in PST. Internally the value
 is adjusted to UTC (noon PST = 20:00 UTC). The display timezone is set to PST.
 
-Conversion (`to TZ`): `Now() to EST` displays the current time in EST. The
+Conversion (`to TZ`): `now() to EST` displays the current time in EST. The
 internal UTC value is unchanged; only the display timezone changes.
 
 Supported timezone abbreviations:
@@ -210,14 +209,63 @@ the variable name from the expression.
 
 ## Functions
 
+### Time Functions
+
 | Function | Args | Description |
 |----------|------|-------------|
-| `Now()`  | 0    | Current UTC time, updates every second |
-| `Date(y, m, d)` | 3 | Date at midnight UTC |
-| `Date(y, m, d, h, min, s)` | 6 | Date with time, UTC |
-| `Time(h, m)` | 2 | Time-of-day today, UTC (seconds = 0) |
-| `Time(h, m, s)` | 3 | Time-of-day today, UTC |
-| `Unix(n)` | 1 | Unix timestamp (auto-detects s/ms/μs/ns) |
+| `now()`  | 0    | Current UTC time, updates every second |
+| `date(y, m, d)` | 3 | Date at midnight UTC |
+| `date(y, m, d, h, min, s)` | 6 | Date with time, UTC |
+| `time(h, m)` | 2 | Time-of-day today, UTC (seconds = 0) |
+| `time(h, m, s)` | 3 | Time-of-day today, UTC |
+| `unix(n)` | 1 | Unix timestamp (auto-detects s/ms/μs/ns) |
+
+### Math Functions
+
+All math functions convert to float64 internally. Results are approximate.
+Values with units or time flags are rejected.
+
+| Function | Args | Description |
+|----------|------|-------------|
+| `sin(x)` | 1 | Sine (radians) |
+| `cos(x)` | 1 | Cosine (radians) |
+| `tan(x)` | 1 | Tangent (radians) |
+| `asin(x)` | 1 | Arcsine (radians) |
+| `acos(x)` | 1 | Arccosine (radians) |
+| `atan(x)` | 1 | Arctangent (radians) |
+| `sqrt(x)` | 1 | Square root |
+| `abs(x)` | 1 | Absolute value |
+| `log(x)` | 1 | Base-10 logarithm |
+| `ln(x)` | 1 | Natural logarithm |
+| `ceil(x)` | 1 | Ceiling (round up) |
+| `floor(x)` | 1 | Floor (round down) |
+| `round(x)` | 1 | Round to nearest integer |
+| `pow(x, y)` | 2 | x raised to the power y |
+| `mod(x, y)` | 2 | Remainder of x / y |
+| `min(x, y)` | 2 | Minimum of x and y |
+| `max(x, y)` | 2 | Maximum of x and y |
+| `atan2(y, x)` | 2 | Two-argument arctangent (radians) |
+
+### Time Extraction Functions
+
+Extract components from a time value. Returns an integer.
+
+| Function | Args | Description |
+|----------|------|-------------|
+| `year(t)` | 1 | Year (e.g. 2024) |
+| `month(t)` | 1 | Month (1–12) |
+| `day(t)` | 1 | Day of month (1–31) |
+| `hour(t)` | 1 | Hour (0–23) |
+| `minute(t)` | 1 | Minute (0–59) |
+| `second(t)` | 1 | Second (0–59) |
+
+### Constants
+
+| Name | Value | Description |
+|------|-------|-------------|
+| `pi` | 3.141592653589793 | Ratio of circumference to diameter |
+| `e`  | 2.718281828459045 | Euler's number |
+| `c`  | 299792458 | Speed of light (m/s) |
 
 ## Units
 
@@ -232,6 +280,7 @@ the variable name from the expression.
 | ft    | feet       | 0.3048        |
 | yd    | yards      | 0.9144        |
 | mi    | miles      | 1609.344      |
+| au    | au         | 149597870700  |
 
 ### Weight
 | Short | Full       | Base (grams)  |
@@ -322,7 +371,7 @@ epoch). Fractional seconds are preserved as exact rationals:
 ```
 @2024-02-01 to unix           → 1706745600
 (@2024-02-01 + 1/2 s) to unix → 1706745600.5
-Now() to unix                  → current unix timestamp
+now() to unix                  → current unix timestamp
 ```
 
 ### `to hex`, `to bin`, `to oct`
@@ -380,15 +429,15 @@ my variable * 2        → 84
 5 m * 3 s              → 15 m*s
 @2024-01-31            → 2024-01-31 00:00:00 +0000
 @2024-01-31T10:30:00   → 2024-01-31 10:30:00 +0000
-Date(2024, 1, 31)      → 2024-01-31 00:00:00 +0000
+date(2024, 1, 31)      → 2024-01-31 00:00:00 +0000
 2024-01-31             → 1992  (arithmetic, no @ prefix)
 2024 - 01 - 31         → 1992  (arithmetic)
-Unix(1706745600)       → 2024-02-01 00:00:00 +0000
+unix(1706745600)       → 2024-02-01 00:00:00 +0000
 @1706745600            → 2024-02-01 00:00:00 +0000
-Unix(1706745600000)    → 2024-02-01 00:00:00 +0000  (auto-detect ms)
+unix(1706745600000)    → 2024-02-01 00:00:00 +0000  (auto-detect ms)
 14:30                  → today 14:30:00 +0000 (time-of-day literal)
 @14:30                 → today 14:30:00 +0000 (@ time sugar)
-Time(14, 30)           → today 14:30:00 +0000
+time(14, 30)           → today 14:30:00 +0000
 3:30 PM                → today 15:30:00 +0000 (AM/PM)
 12:00 AM               → today 00:00:00 +0000 (midnight)
 12:00 PM               → today 12:00:00 +0000 (noon)
@@ -396,9 +445,9 @@ Time(14, 30)           → today 14:30:00 +0000
 12:00 PST              → today 12:00:00 -0800 (input timezone)
 12:00 PST to UTC       → today 20:00:00 +0000 (round-trip)
 12:00 UTC to PST       → today 04:00:00 -0800 (timezone conversion)
-Now()                  → current UTC time, updates every second
-Now() to EST           → current time in EST
-Now() - @2024-01-01    → duration in seconds since Jan 1 2024
+now()                  → current UTC time, updates every second
+now() to EST           → current time in EST
+now() - @2024-01-01    → duration in seconds since Jan 1 2024
 @2024-01-31 + 1 d      → 2024-02-01 00:00:00 +0000
 @2024-01-31 + 24 hr    → 2024-02-01 00:00:00 +0000
 @2024-01-31 + 86400 s  → 2024-02-01 00:00:00 +0000
@@ -409,7 +458,7 @@ Now() - @2024-01-01    → duration in seconds since Jan 1 2024
 @2024-01-31 02:30:00 -0800 → 2024-01-31 10:30:00 +0000 (offset round-trip)
 @2024-01-31T10:30:00 to PST → 2024-01-31 02:30:00 -0800
 @2024-02-01 to unix    → 1706745600
-Now() to unix          → current unix timestamp
+now() to unix          → current unix timestamp
 0xFF                   → 255
 0b1010                 → 10
 0o77                   → 63
@@ -420,4 +469,23 @@ Now() to unix          → current unix timestamp
 100 km to mi           → ~62.14 mi
 40 mi / 1 gal to km/L  → ~17.01 km/L
 5 m + 300 cm to km     → 0.008 km
+sin(pi / 2)            → 1
+cos(0)                 → 1
+sqrt(4)                → 2
+log(100)               → 2
+ln(e)                  → 1
+abs(-5)                → 5
+ceil(3.2)              → 4
+floor(3.8)             → 3
+round(3.5)             → 4
+pow(2, 10)             → 1024
+mod(10, 3)             → 1
+min(3, 7)              → 3
+max(3, 7)              → 7
+year(@2024-06-15)      → 2024
+month(@2024-06-15)     → 6
+day(@2024-06-15)       → 15
+pi                     → 3.141592653589793
+e                      → 2.718281828459045
+c                      → 299792458
 ```

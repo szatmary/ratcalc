@@ -58,7 +58,7 @@ func collectDepsWalk(node Node, info *DepsInfo) {
 		info.Assigns = n.Name
 		collectDepsWalk(n.Expr, info)
 	case *FuncCall:
-		if n.Name == "Now" {
+		if n.Name == "now" {
 			info.UsesNow = true
 		}
 		for _, arg := range n.Args {

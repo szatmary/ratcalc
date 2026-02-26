@@ -43,6 +43,7 @@ var allUnits = []*Unit{
 	{Short: "ft", Full: "foot", FullPl: "feet", Category: UnitLength, ToBase: ratFromFloat(0.3048)},
 	{Short: "yd", Full: "yard", FullPl: "yards", Category: UnitLength, ToBase: ratFromFloat(0.9144)},
 	{Short: "mi", Full: "mile", FullPl: "miles", Category: UnitLength, ToBase: ratFromFloat(1609.344)},
+	{Short: "au", Full: "au", FullPl: "au", Category: UnitLength, ToBase: ratFromFrac(149597870700, 1)},
 
 	// Weight (base: grams)
 	{Short: "mg", Full: "milligram", FullPl: "milligrams", Category: UnitWeight, ToBase: ratFromFrac(1, 1000)},

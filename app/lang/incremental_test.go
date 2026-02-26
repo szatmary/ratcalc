@@ -43,30 +43,30 @@ func TestIncrementalDirtyPropagation(t *testing.T) {
 func TestIncrementalNowTick(t *testing.T) {
 	es := &EvalState{}
 
-	lines := []string{"Now()"}
+	lines := []string{"now()"}
 	results := es.EvalAllIncremental(lines, false)
 	if results[0].IsErr {
-		t.Fatalf("Now() error: %s", results[0].Text)
+		t.Fatalf("now() error: %s", results[0].Text)
 	}
 
 	// Re-eval with nowTicked=true should re-evaluate
 	results2 := es.EvalAllIncremental(lines, true)
 	if results2[0].IsErr {
-		t.Fatalf("Now() error on tick: %s", results2[0].Text)
+		t.Fatalf("now() error on tick: %s", results2[0].Text)
 	}
 	// Both should be valid time strings (can't easily test value changed in same second)
 	if results2[0].Text == "" {
-		t.Error("expected non-empty result for Now() after tick")
+		t.Error("expected non-empty result for now() after tick")
 	}
 }
 
 func TestIncrementalNowTickWithTZ(t *testing.T) {
 	es := &EvalState{}
 
-	lines := []string{"Now() to EST"}
+	lines := []string{"now() to EST"}
 	results := es.EvalAllIncremental(lines, false)
 	if results[0].IsErr {
-		t.Fatalf("Now() to EST error: %s", results[0].Text)
+		t.Fatalf("now() to EST error: %s", results[0].Text)
 	}
 
 	// Re-eval with nowTicked=false should use cache (no re-eval)
@@ -78,10 +78,10 @@ func TestIncrementalNowTickWithTZ(t *testing.T) {
 	// Re-eval with nowTicked=true should re-evaluate (UsesNow detected through TZExpr)
 	results3 := es.EvalAllIncremental(lines, true)
 	if results3[0].IsErr {
-		t.Fatalf("Now() to EST error on tick: %s", results3[0].Text)
+		t.Fatalf("now() to EST error on tick: %s", results3[0].Text)
 	}
 	if results3[0].Text == "" {
-		t.Error("expected non-empty result for Now() to EST after tick")
+		t.Error("expected non-empty result for now() to EST after tick")
 	}
 }
 

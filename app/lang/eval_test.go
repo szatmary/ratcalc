@@ -270,14 +270,14 @@ func TestBareUnitFallback(t *testing.T) {
 
 func TestUnixFunction(t *testing.T) {
 	env := make(Env)
-	val, err := EvalLine("Unix(1706745600)", env)
+	val, err := EvalLine("unix(1706745600)", env)
 	if err != nil {
-		t.Fatalf("Unix() error: %v", err)
+		t.Fatalf("unix() error: %v", err)
 	}
 	got := val.String()
 	want := "2024-02-01 00:00:00 +0000"
 	if got != want {
-		t.Errorf("Unix(1706745600) = %q, want %q", got, want)
+		t.Errorf("unix(1706745600) = %q, want %q", got, want)
 	}
 	if !val.IsTime {
 		t.Error("expected IsTime=true")
@@ -287,18 +287,18 @@ func TestUnixFunction(t *testing.T) {
 func TestUnixAutoDetectMs(t *testing.T) {
 	env := make(Env)
 	// Same timestamp in milliseconds
-	val, err := EvalLine("Unix(1706745600000)", env)
+	val, err := EvalLine("unix(1706745600000)", env)
 	if err != nil {
-		t.Fatalf("Unix() ms error: %v", err)
+		t.Fatalf("unix() ms error: %v", err)
 	}
 	got := val.String()
 	want := "2024-02-01 00:00:00 +0000"
 	if got != want {
-		t.Errorf("Unix(1706745600000) = %q, want %q", got, want)
+		t.Errorf("unix(1706745600000) = %q, want %q", got, want)
 	}
 }
 
-func TestToUnix(t *testing.T) {
+func TestTounix(t *testing.T) {
 	env := make(Env)
 
 	// Date to unix — should give raw timestamp number
@@ -334,56 +334,56 @@ func TestToUnix(t *testing.T) {
 func TestDateFunction(t *testing.T) {
 	env := make(Env)
 
-	// Date(y, m, d) — 3 args
-	val, err := EvalLine("Date(2024, 1, 31)", env)
+	// date(y, m, d) — 3 args
+	val, err := EvalLine("date(2024, 1, 31)", env)
 	if err != nil {
-		t.Fatalf("Date(2024, 1, 31) error: %v", err)
+		t.Fatalf("date(2024, 1, 31) error: %v", err)
 	}
 	if !val.IsTime {
-		t.Error("expected IsTime=true for Date()")
+		t.Error("expected IsTime=true for date()")
 	}
 	got := val.String()
 	want := "2024-01-31 00:00:00 +0000"
 	if got != want {
-		t.Errorf("Date(2024, 1, 31) = %q, want %q", got, want)
+		t.Errorf("date(2024, 1, 31) = %q, want %q", got, want)
 	}
 
-	// Date(y, m, d, h, m, s) — 6 args
-	val, err = EvalLine("Date(2024, 1, 31, 10, 30, 0)", env)
+	// date(y, m, d, h, m, s) — 6 args
+	val, err = EvalLine("date(2024, 1, 31, 10, 30, 0)", env)
 	if err != nil {
-		t.Fatalf("Date(2024, 1, 31, 10, 30, 0) error: %v", err)
+		t.Fatalf("date(2024, 1, 31, 10, 30, 0) error: %v", err)
 	}
 	got = val.String()
 	want = "2024-01-31 10:30:00 +0000"
 	if got != want {
-		t.Errorf("Date(2024, 1, 31, 10, 30, 0) = %q, want %q", got, want)
+		t.Errorf("date(2024, 1, 31, 10, 30, 0) = %q, want %q", got, want)
 	}
 }
 
 func TestTimeFunction(t *testing.T) {
 	env := make(Env)
 
-	// Time(h, m) — 2 args
-	val, err := EvalLine("Time(14, 30)", env)
+	// time(h, m) — 2 args
+	val, err := EvalLine("time(14, 30)", env)
 	if err != nil {
-		t.Fatalf("Time(14, 30) error: %v", err)
+		t.Fatalf("time(14, 30) error: %v", err)
 	}
 	if !val.IsTime {
-		t.Error("expected IsTime=true for Time()")
+		t.Error("expected IsTime=true for time()")
 	}
 	got := val.String()
 	if !strings.Contains(got, "14:30:00") {
-		t.Errorf("Time(14, 30) = %q, expected to contain 14:30:00", got)
+		t.Errorf("time(14, 30) = %q, expected to contain 14:30:00", got)
 	}
 
-	// Time(h, m, s) — 3 args
-	val, err = EvalLine("Time(9, 5, 30)", env)
+	// time(h, m, s) — 3 args
+	val, err = EvalLine("time(9, 5, 30)", env)
 	if err != nil {
-		t.Fatalf("Time(9, 5, 30) error: %v", err)
+		t.Fatalf("time(9, 5, 30) error: %v", err)
 	}
 	got = val.String()
 	if !strings.Contains(got, "09:05:30") {
-		t.Errorf("Time(9, 5, 30) = %q, expected to contain 09:05:30", got)
+		t.Errorf("time(9, 5, 30) = %q, expected to contain 09:05:30", got)
 	}
 }
 
@@ -683,17 +683,17 @@ func TestTimezoneConversion(t *testing.T) {
 		t.Errorf("12:00 UTC to PST = %q, expected 04:00:00 -0800", got)
 	}
 
-	// Now() to EST — should work and show EST offset
-	val, err = EvalLine("Now() to EST", env)
+	// now() to EST — should work and show EST offset
+	val, err = EvalLine("now() to EST", env)
 	if err != nil {
-		t.Fatalf("Now() to EST error: %v", err)
+		t.Fatalf("now() to EST error: %v", err)
 	}
 	if !val.IsTime {
-		t.Error("expected IsTime=true for Now() to EST")
+		t.Error("expected IsTime=true for now() to EST")
 	}
 	got = val.String()
 	if !strings.Contains(got, "-0500") {
-		t.Errorf("Now() to EST = %q, expected -0500 offset", got)
+		t.Errorf("now() to EST = %q, expected -0500 offset", got)
 	}
 
 	// @2024-01-31T10:30:00 to PST — date with timezone conversion
@@ -822,16 +822,16 @@ func TestBaseConversions(t *testing.T) {
 
 func TestNow(t *testing.T) {
 	env := make(Env)
-	val, err := EvalLine("Now()", env)
+	val, err := EvalLine("now()", env)
 	if err != nil {
-		t.Fatalf("Now() error: %v", err)
+		t.Fatalf("now() error: %v", err)
 	}
 	if !val.IsTime {
-		t.Error("expected Now() to return time")
+		t.Error("expected now() to return time")
 	}
 	// Just check the format is correct
 	got := val.String()
 	if !strings.Contains(got, "+0000") {
-		t.Errorf("Now() = %q, expected UTC format", got)
+		t.Errorf("now() = %q, expected UTC format", got)
 	}
 }

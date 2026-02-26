@@ -20,12 +20,12 @@ func TestLanguageSpecExamples(t *testing.T) {
 		// Dates and times
 		{"@2024-01-31", "2024-01-31 00:00:00 +0000"},
 		{"@2024-01-31T10:30:00", "2024-01-31 10:30:00 +0000"},
-		{"Date(2024, 1, 31)", "2024-01-31 00:00:00 +0000"},
+		{"date(2024, 1, 31)", "2024-01-31 00:00:00 +0000"},
 		{"2024-01-31", "1992"},
 		{"2024 - 01 - 31", "1992"},
-		{"Unix(1706745600)", "2024-02-01 00:00:00 +0000"},
+		{"unix(1706745600)", "2024-02-01 00:00:00 +0000"},
 		{"@1706745600", "2024-02-01 00:00:00 +0000"},
-		{"Unix(1706745600000)", "2024-02-01 00:00:00 +0000"},
+		{"unix(1706745600000)", "2024-02-01 00:00:00 +0000"},
 
 		// Units
 		{"5 meters + 100 cm", "6 m"},
@@ -73,6 +73,35 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"@2026-12-5", "2026-12-05 00:00:00 +0000"},
 		{"@2026-2-25T10:30:00", "2026-02-25 10:30:00 +0000"},
 		{"@2026-2-25 10:30:00", "2026-02-25 10:30:00 +0000"},
+
+		// Math functions
+		{"sin(pi / 2)", "1"},
+		{"cos(0)", "1"},
+		{"sqrt(4)", "2"},
+		{"log(100)", "2"},
+		{"ln(e)", "1"},
+		{"abs(-5)", "5"},
+		{"ceil(3.2)", "4"},
+		{"floor(3.8)", "3"},
+		{"round(3.5)", "4"},
+		{"pow(2, 10)", "1024"},
+		{"mod(10, 3)", "1"},
+		{"min(3, 7)", "3"},
+		{"max(3, 7)", "7"},
+
+		// Time extraction
+		{"year(@2024-06-15)", "2024"},
+		{"month(@2024-06-15)", "6"},
+		{"day(@2024-06-15)", "15"},
+		{"hour(@2024-06-15T10:30:00)", "10"},
+		{"minute(@2024-06-15T10:30:00)", "30"},
+		{"second(@2024-06-15T10:30:45)", "45"},
+
+		// Constants
+		{"c", "299792458"},
+
+		// AU unit
+		{"1 au to km", "1495978707/10 km"},
 	}
 
 	for _, tt := range exact {
@@ -126,12 +155,12 @@ func TestLanguageSpecTimeOfDay(t *testing.T) {
 	}{
 		{"14:30", []string{"14:30:00", "+0000"}},
 		{"@14:30", []string{"14:30:00", "+0000"}},
-		{"Time(14, 30)", []string{"14:30:00", "+0000"}},
+		{"time(14, 30)", []string{"14:30:00", "+0000"}},
 		{"12:00 PST", []string{"12:00:00", "-0800"}},
 		{"12:00 PST to UTC", []string{"20:00:00", "+0000"}},
 		{"12:00 UTC to PST", []string{"04:00:00", "-0800"}},
-		{"Now()", []string{"+0000"}},
-		{"Now() to EST", []string{"-0500"}},
+		{"now()", []string{"+0000"}},
+		{"now() to EST", []string{"-0500"}},
 	}
 
 	for _, tt := range contains {
@@ -150,32 +179,32 @@ func TestLanguageSpecTimeOfDay(t *testing.T) {
 	}
 }
 
-// TestLanguageSpecNowArithmetic tests Now()-based arithmetic.
+// TestLanguageSpecNowArithmetic tests now()-based arithmetic.
 func TestLanguageSpecNowArithmetic(t *testing.T) {
 	env := make(Env)
 
-	// Now() - @2024-01-01 → duration in seconds
-	val, err := EvalLine("Now() - @2024-01-01", env)
+	// now() - @2024-01-01 → duration in seconds
+	val, err := EvalLine("now() - @2024-01-01", env)
 	if err != nil {
-		t.Fatalf("Now() - @2024-01-01 error: %v", err)
+		t.Fatalf("now() - @2024-01-01 error: %v", err)
 	}
 	if val.IsTime {
-		t.Error("expected duration (not time) from Now() - @date")
+		t.Error("expected duration (not time) from now() - @date")
 	}
 	if val.Unit == nil || val.Unit.String() != "s" {
 		t.Errorf("expected unit 's', got %v", val.Unit)
 	}
 
-	// Now() to unix → positive integer
-	val, err = EvalLine("Now() to unix", env)
+	// now() to unix → positive integer
+	val, err = EvalLine("now() to unix", env)
 	if err != nil {
-		t.Fatalf("Now() to unix error: %v", err)
+		t.Fatalf("now() to unix error: %v", err)
 	}
 	if val.IsTime {
 		t.Error("expected IsTime=false after to unix")
 	}
 	if val.Rat.Sign() <= 0 {
-		t.Errorf("Now() to unix = %s, expected positive", val.String())
+		t.Errorf("now() to unix = %s, expected positive", val.String())
 	}
 }
 
