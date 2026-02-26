@@ -423,6 +423,10 @@ Temperature units cannot appear in compound units (no `C/s`).
 | Mbit  | megabits   | 125000       |
 | Gbit  | gigabits   | 125000000    |
 | Tbit  | terabits   | 125000000000 |
+| Kibit | kibibits   | 128          |
+| Mibit | mebibits   | 131072       |
+| Gibit | gibibits   | 134217728    |
+| Tibit | tebibits   | 137438953472 |
 | B     | bytes      | 1            |
 | KB    | kilobytes  | 1000         |
 | MB    | megabytes  | 1e6          |
