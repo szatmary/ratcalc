@@ -88,7 +88,7 @@ nav button.active {
 #highlight div {
   height: 21px;
 }
-#highlight .hl-line {
+#highlight .hl-line, #line-numbers .hl-line, #results .hl-line {
   background: rgba(255,255,255,0.04);
 }
 #editor {
@@ -427,7 +427,16 @@ function getCurrentLine() {
 }
 
 function updateHighlight() {
-  highlightDiv.innerHTML = buildHighlight(editor.value, getCurrentLine());
+  var cur = getCurrentLine();
+  highlightDiv.innerHTML = buildHighlight(editor.value, cur);
+  var lnDivs = lineNumbers.children;
+  var rsDivs = resultsDiv.children;
+  for (var i = 0; i < lnDivs.length; i++) {
+    lnDivs[i].classList.toggle('hl-line', i === cur);
+  }
+  for (var i = 0; i < rsDivs.length; i++) {
+    rsDivs[i].classList.toggle('hl-line', i === cur);
+  }
 }
 
 function measureMaxChars() {
