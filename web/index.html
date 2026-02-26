@@ -13,13 +13,6 @@ body {
   overflow: hidden;
   height: 100vh;
 }
-#giowindow {
-  position: fixed;
-  top: 39px;
-  left: 0;
-  width: 100%;
-  height: calc(100vh - 39px);
-}
 nav {
   position: fixed;
   top: 0;
@@ -45,6 +38,75 @@ nav button.active {
   color: #cdd6f4;
   border-bottom-color: #89b4fa;
 }
+
+/* --- Calculator layout --- */
+#calc-container {
+  position: fixed;
+  top: 39px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  overflow: hidden;
+}
+#line-numbers {
+  width: 48px;
+  min-width: 48px;
+  background: #181825;
+  color: #585b70;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 8px 8px 8px 0;
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+  border-right: 1px solid #313244;
+}
+#line-numbers div {
+  height: 21px;
+  white-space: nowrap;
+}
+#editor {
+  flex: 1;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 8px 12px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: pre;
+  tab-size: 4;
+}
+#results {
+  width: 280px;
+  min-width: 280px;
+  background: #181825;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 8px 12px;
+  overflow: hidden;
+  user-select: text;
+  border-left: 1px solid #313244;
+}
+#results div {
+  height: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #a6e3a1;
+}
+#results div.err {
+  color: #f38ba8;
+}
+
+/* --- Language tab --- */
 #tab-lang {
   position: fixed;
   top: 39px;
@@ -109,79 +171,83 @@ nav button.active {
   <button onclick="shareLink()">Share</button>
   <button onclick="window.open('https://github.com/szatmary/ratcalc','_blank')">GitHub</button>
 </nav>
-<div id="giowindow"></div>
+<div id="calc-container">
+  <div id="line-numbers"><div>1</div></div>
+  <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  <div id="results"></div>
+</div>
 <div id="tab-lang"><div class="markdown" id="lang-content"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
+// --- Tab switching ---
 function showTab(tab) {
   document.getElementById('tab-lang').style.display = tab === 'lang' ? 'block' : 'none';
-  document.querySelectorAll('nav button').forEach((btn, i) => {
+  document.getElementById('calc-container').style.display = tab === 'calc' ? 'flex' : 'none';
+  document.querySelectorAll('nav button').forEach(function(btn, i) {
     btn.classList.toggle('active', (i === 0 && tab === 'calc') || (i === 1 && tab === 'lang'));
   });
+  if (tab === 'calc') document.getElementById('editor').focus();
 }
 
+// --- Language spec ---
 fetch('LANGUAGE.md')
-  .then(r => r.text())
-  .then(md => { document.getElementById('lang-content').innerHTML = marked.parse(md); });
-</script>
-<script>
-// --- Keyboard shortcut handling ---
-// Gio on WASM maps Ctrl (not Cmd/Meta) to ModShortcut. macOS browser
-// users press Cmd for shortcuts. We intercept in the capturing phase,
-// prevent browser defaults, and for Cmd+key re-dispatch as Ctrl+key
-// so Gio recognizes them. Paste is handled entirely in JS.
-var shortcutKeys = ['a','c','x','z','y','s','o'];
-var shortcutSymbols = ['=','-','+'];
+  .then(function(r) { return r.text(); })
+  .then(function(md) { document.getElementById('lang-content').innerHTML = marked.parse(md); });
 
-document.addEventListener('keydown', function(e) {
-  if (document.getElementById('tab-lang').style.display !== 'none') return;
-  var mod = e.ctrlKey || e.metaKey;
-  if (!mod) return;
-  var k = e.key.toLowerCase();
-  var input = document.querySelector('#giowindow input');
+// --- Editor evaluation ---
+var editor = document.getElementById('editor');
+var lineNumbers = document.getElementById('line-numbers');
+var resultsDiv = document.getElementById('results');
+var nowInterval = null;
 
-  // Handle paste entirely in JS (Gio's Clipboard API call fails on web)
-  if (k === 'v') {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    navigator.clipboard.readText().then(function(text) {
-      if (!text || !input) return;
-      input.value = text;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }).catch(function() {});
-    return;
+function runEval(nowTicked) {
+  if (typeof evaluate !== 'function') return;
+  var results = evaluate(editor.value, nowTicked);
+  if (!results) return;
+
+  var lines = editor.value.split('\n');
+  var count = lines.length;
+
+  // Update line numbers
+  var lnHtml = '';
+  for (var i = 1; i <= count; i++) {
+    lnHtml += '<div>' + i + '</div>';
   }
+  lineNumbers.innerHTML = lnHtml;
 
-  // Prevent browser defaults for our shortcuts
-  if (shortcutKeys.includes(k) || shortcutSymbols.includes(e.key)) {
-    e.preventDefault();
+  // Update results
+  var rHtml = '';
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    if (r.isErr) {
+      rHtml += '<div class="err">' + escapeHtml(r.text) + '</div>';
+    } else {
+      rHtml += '<div>' + escapeHtml(r.text) + '</div>';
+    }
   }
+  resultsDiv.innerHTML = rHtml;
+}
 
-  // Convert Cmd+key to Ctrl+key so Gio sees ModShortcut
-  if (e.metaKey && !e.ctrlKey && input) {
-    e.stopImmediatePropagation();
-    input.dispatchEvent(new KeyboardEvent('keydown', {
-      key: e.key, code: e.code,
-      ctrlKey: true, shiftKey: e.shiftKey, altKey: e.altKey,
-      bubbles: true, cancelable: true,
-    }));
-  }
-}, true);
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
-// Fallback paste handler for right-click paste
-document.addEventListener('paste', function(e) {
-  if (document.getElementById('tab-lang').style.display !== 'none') return;
-  var text = (e.clipboardData || window.clipboardData).getData('text');
-  if (!text) return;
-  var input = document.querySelector('#giowindow input');
-  if (input) {
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-  e.stopImmediatePropagation();
-  e.preventDefault();
-}, true);
+editor.addEventListener('input', function() {
+  runEval(false);
+});
+
+// --- Scroll sync ---
+editor.addEventListener('scroll', function() {
+  lineNumbers.scrollTop = editor.scrollTop;
+  resultsDiv.scrollTop = editor.scrollTop;
+});
+
+// --- Now() refresh every second ---
+nowInterval = setInterval(function() {
+  runEval(true);
+}, 1000);
 
 // --- Share link ---
 function base64urlEncode(data) {
@@ -242,15 +308,26 @@ async function shareLink() {
 </script>
 <script src="wasm_exec.js"></script>
 <script>
-// Decode URL parameter before WASM loads so Go can read it on init
+// Decode URL parameter before WASM loads, then start WASM
 (async function() {
+  var initialText = null;
   var params = new URLSearchParams(window.location.search);
   var encoded = params.get('t');
   if (encoded) {
     try {
-      window._initialText = await decompress(base64urlDecode(encoded));
+      initialText = await decompress(base64urlDecode(encoded));
     } catch(e) { console.error('Failed to decode shared text:', e); }
   }
+
+  // When WASM is ready, set initial text and run first eval
+  window._onWasmReady = function() {
+    if (initialText) {
+      editor.value = initialText;
+    }
+    runEval(false);
+    editor.focus();
+  };
+
   var go = new Go();
   var result = await WebAssembly.instantiateStreaming(
     fetch("ratcalc.wasm"), go.importObject

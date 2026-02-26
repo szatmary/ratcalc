@@ -30,7 +30,7 @@ jobs:
         run: |
           mkdir -p _site
           cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" _site/
-          GOOS=js GOARCH=wasm go build -o _site/ratcalc.wasm ./app/
+          GOOS=js GOARCH=wasm go build -o _site/ratcalc.wasm ./wasm/
           cp web/index.html _site/
           cp LANGUAGE.md _site/
 
