@@ -113,6 +113,11 @@ func (v CompoundValue) String() string {
 		}
 		return t.Format("2006-01-02 15:04:05 +0000")
 	}
+	// Check for HMS display
+	if v.Num.Unit.ToBase == "hms" {
+		return formatHMS(v.effectiveRat())
+	}
+
 	dr := v.DisplayRat()
 	cu := v.CompoundUnit()
 
@@ -190,6 +195,31 @@ func formatRat(r *big.Rat) string {
 	}
 
 	return formatSci(r)
+}
+
+// formatHMS formats a rational number of seconds as "Xh Ym Zs".
+func formatHMS(r *big.Rat) string {
+	neg := r.Sign() < 0
+	abs := new(big.Rat).Abs(r)
+	total := new(big.Int).Div(abs.Num(), abs.Denom())
+
+	hours := new(big.Int).Div(total, big.NewInt(3600))
+	rem := new(big.Int).Mod(total, big.NewInt(3600))
+	mins := new(big.Int).Div(rem, big.NewInt(60))
+	secs := new(big.Int).Mod(rem, big.NewInt(60))
+
+	var s string
+	if hours.Sign() > 0 {
+		s = hours.String() + "h "
+	}
+	if hours.Sign() > 0 || mins.Sign() > 0 {
+		s += mins.String() + "m "
+	}
+	s += secs.String() + "s"
+	if neg {
+		s = "-" + s
+	}
+	return s
 }
 
 // formatSci formats a rational in scientific notation (e.g. 1.23e15).

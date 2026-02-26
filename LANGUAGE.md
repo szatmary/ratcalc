@@ -524,6 +524,17 @@ an error. Physical units are stripped — only the numeric value is displayed.
 255 B to hex      → 0xff   (units stripped)
 ```
 
+### `to hms`
+
+`to hms` formats a time or dimensionless value (in seconds) as hours, minutes,
+and seconds:
+
+```
+3661 to hms       → 1h 1m 1s
+2.5 hr to hms     → 2h 30m 0s
+90 s to hms       → 1m 30s
+```
+
 `to` is a **context-sensitive keyword**: it is only treated as the conversion
 operator when immediately followed by a known unit name or timezone abbreviation.
 Otherwise `to` is a valid variable name.

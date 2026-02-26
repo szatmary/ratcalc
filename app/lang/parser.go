@@ -398,6 +398,11 @@ func (p *Parser) parseConversion(expr Node) (Node, error) {
 		p.advance() // consume "oct"
 		return &FuncCall{Name: "__to_oct", Args: []Node{expr}}, nil
 	}
+	if nextWord == "hms" {
+		p.advance() // consume "to"
+		p.advance() // consume "hms"
+		return &FuncCall{Name: "__to_hms", Args: []Node{expr}}, nil
+	}
 	// Check for unit conversion
 	if LookupUnit(nextWord) == nil {
 		return expr, nil

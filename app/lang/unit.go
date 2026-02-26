@@ -210,6 +210,9 @@ var (
 	octUnit = Unit{Short: "", Category: UnitNumber, ToBase: 8}
 )
 
+// hmsUnit is a sentinel for hours-minutes-seconds display. The value is in seconds.
+var hmsUnit = Unit{Short: "hms", Category: UnitNumber, ToBase: "hms"}
+
 // TimestampUnit returns a CompoundUnit representing an absolute timestamp.
 func TimestampUnit() CompoundUnit {
 	return SimpleUnit(tsUnit)

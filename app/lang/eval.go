@@ -616,6 +616,23 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		}
 		return dimless(val.DisplayRat()), nil
 
+	case "__to_hms":
+		if len(n.Args) != 1 {
+			return CompoundValue{}, &EvalError{Msg: "to hms requires a value"}
+		}
+		val, err := Eval(n.Args[0], env)
+		if err != nil {
+			return CompoundValue{}, err
+		}
+		if !isSimpleTimeUnit(val) && !val.IsEmpty() {
+			return CompoundValue{}, &EvalError{Msg: "to hms requires a time or dimensionless value"}
+		}
+		// Convert to seconds (effectiveRat is already in base = seconds for time units)
+		secs := val.effectiveRat()
+		v := dimless(new(big.Rat).Set(secs))
+		v.Num.Unit = hmsUnit
+		return v, nil
+
 	case "pow":
 		return evalPow(n, env)
 	case "mod":
