@@ -1358,6 +1358,9 @@ func TestCurrency(t *testing.T) {
 		{"50 EUR", "€50.00"},
 		{"50 CAD", "50.00 CAD"},
 		{"$(50 + 30)", "$80.00"},
+		// Compound currency units
+		{"$4 / 1 hr", "$4.00/hr"},
+		{"$240 / 1 hr to $/min", "$4.00/min"},
 	}
 	for _, tt := range tests {
 		env := make(Env)

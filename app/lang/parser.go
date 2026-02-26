@@ -467,11 +467,24 @@ func (p *Parser) parseConversion(expr Node) (Node, error) {
 	if p.peek().Type != TOKEN_WORD || p.peek().Literal != "to" {
 		return expr, nil
 	}
-	// Look ahead: the token after "to" must be a known unit or timezone
-	if p.pos+1 >= len(p.tokens) || p.tokens[p.pos+1].Type != TOKEN_WORD {
+	// Look ahead: the token after "to" must be a known unit, timezone, or currency symbol
+	if p.pos+1 >= len(p.tokens) {
 		return expr, nil
 	}
-	nextWord := p.tokens[p.pos+1].Literal
+	nextTok := p.tokens[p.pos+1]
+	if nextTok.Type == TOKEN_CURRENCY {
+		// Currency symbol after "to" — parse as compound unit spec
+		p.advance() // consume "to"
+		unit, err := p.parseCompoundUnitSpec()
+		if err != nil {
+			return nil, err
+		}
+		return &UnitExpr{Expr: expr, Unit: unit}, nil
+	}
+	if nextTok.Type != TOKEN_WORD {
+		return expr, nil
+	}
+	nextWord := nextTok.Literal
 	// Check for timezone conversion
 	if IsTimezone(nextWord) {
 		p.advance() // consume "to"
@@ -532,10 +545,11 @@ func isTimeProducing(node Node) bool {
 	}
 }
 
-// parseCompoundUnitSpec parses a compound unit like "km/L".
+// parseCompoundUnitSpec parses a compound unit like "km/L" or "$/min".
 // Grammar: UNIT ("/" UNIT)?
+// UNIT can be a WORD or CURRENCY token.
 func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
-	if p.peek().Type != TOKEN_WORD {
+	if p.peek().Type != TOKEN_WORD && p.peek().Type != TOKEN_CURRENCY {
 		return CompoundUnit{}, &EvalError{Msg: "expected unit after 'to'"}
 	}
 	first := p.advance()
@@ -547,13 +561,13 @@ func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
 
 	if p.peek().Type == TOKEN_SLASH {
 		p.advance() // consume '/'
-		if p.peek().Type != TOKEN_WORD {
+		if p.peek().Type != TOKEN_WORD && p.peek().Type != TOKEN_CURRENCY {
 			return CompoundUnit{}, &EvalError{Msg: "expected unit after '/'"}
 		}
-		word := p.advance()
-		den := LookupUnit(word.Literal)
+		tok := p.advance()
+		den := LookupUnit(tok.Literal)
 		if den == nil {
-			return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + word.Literal}
+			return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + tok.Literal}
 		}
 		cu.Den = *den
 	}

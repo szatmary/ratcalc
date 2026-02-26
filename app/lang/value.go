@@ -119,7 +119,7 @@ func (v CompoundValue) String() string {
 	}
 
 	// Check for currency display
-	if v.Num.Unit.Category == UnitCurrency && v.Den.Unit.Category == UnitNumber {
+	if v.Num.Unit.Category == UnitCurrency {
 		return formatCurrency(v)
 	}
 
@@ -229,6 +229,7 @@ func formatHMS(r *big.Rat) string {
 
 // formatCurrency formats a currency value with 2 decimal places.
 // Uses symbol prefix for known currencies ($80.00, €50.00) and suffix for others (80.00 CAD).
+// Compound units append the denominator: $4.00/hr.
 func formatCurrency(v CompoundValue) string {
 	dr := v.DisplayRat()
 
@@ -248,13 +249,19 @@ func formatCurrency(v CompoundValue) string {
 		numStr = "-" + numStr
 	}
 
+	// Denominator suffix for compound units (e.g. /hr, /min)
+	denSuffix := ""
+	if v.Den.Unit.Category != UnitNumber {
+		denSuffix = "/" + v.Den.Unit.Short
+	}
+
 	if sym, ok := currencySymbols[v.Num.Unit.Short]; ok {
 		if neg {
-			return "-" + sym + numStr[1:] // -$80.00
+			return "-" + sym + numStr[1:] + denSuffix
 		}
-		return sym + numStr
+		return sym + numStr + denSuffix
 	}
-	return numStr + " " + v.Num.Unit.Short
+	return numStr + " " + v.Num.Unit.Short + denSuffix
 }
 
 // formatSci formats a rational in scientific notation (e.g. 1.23e15).

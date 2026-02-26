@@ -311,6 +311,8 @@ $100 * 1.08        → $108.00
 50 EUR             → €50.00
 50 CAD             → 50.00 CAD  (no symbol, suffix)
 $(50 + 30)         → $80.00
+$4 / 1 hr          → $4.00/hr  (compound currency unit)
+$240 / 1 hr to $/min → $4.00/min
 ```
 
 ## Compound Units
