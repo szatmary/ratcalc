@@ -13,6 +13,15 @@ const (
 	UnitWeight
 	UnitTime
 	UnitVolume
+	UnitTemperature
+	UnitPressure
+	UnitForce
+	UnitEnergy
+	UnitPower
+	UnitVoltage
+	UnitCurrent
+	UnitResistance
+	UnitData
 )
 
 // Unit defines a unit with its category and conversion factor to the base unit.
@@ -21,12 +30,16 @@ type Unit struct {
 	Full     string       // full singular name (e.g. "meter")
 	FullPl   string       // full plural name (e.g. "meters")
 	Category UnitCategory
-	// ToBase is the conversion factor: value_in_base = value * ToBase
+	// ToBase is the conversion factor: value_in_base = (value + PreOffset) * ToBase
 	ToBase *big.Rat
+	// PreOffset is added before multiplying by ToBase. Used for temperature.
+	// nil means 0.
+	PreOffset *big.Rat
 }
 
-func ratFromFloat(f float64) *big.Rat {
-	return new(big.Rat).SetFloat64(f)
+// HasOffset returns true if this unit uses an offset-based conversion.
+func (u *Unit) HasOffset() bool {
+	return u.PreOffset != nil && u.PreOffset.Sign() != 0
 }
 
 func ratFromFrac(num, denom int64) *big.Rat {
@@ -39,18 +52,18 @@ var allUnits = []*Unit{
 	{Short: "cm", Full: "centimeter", FullPl: "centimeters", Category: UnitLength, ToBase: ratFromFrac(1, 100)},
 	{Short: "m", Full: "meter", FullPl: "meters", Category: UnitLength, ToBase: ratFromFrac(1, 1)},
 	{Short: "km", Full: "kilometer", FullPl: "kilometers", Category: UnitLength, ToBase: ratFromFrac(1000, 1)},
-	{Short: "in", Full: "inch", FullPl: "inches", Category: UnitLength, ToBase: ratFromFloat(0.0254)},
-	{Short: "ft", Full: "foot", FullPl: "feet", Category: UnitLength, ToBase: ratFromFloat(0.3048)},
-	{Short: "yd", Full: "yard", FullPl: "yards", Category: UnitLength, ToBase: ratFromFloat(0.9144)},
-	{Short: "mi", Full: "mile", FullPl: "miles", Category: UnitLength, ToBase: ratFromFloat(1609.344)},
+	{Short: "in", Full: "inch", FullPl: "inches", Category: UnitLength, ToBase: ratFromFrac(127, 5000)},
+	{Short: "ft", Full: "foot", FullPl: "feet", Category: UnitLength, ToBase: ratFromFrac(381, 1250)},
+	{Short: "yd", Full: "yard", FullPl: "yards", Category: UnitLength, ToBase: ratFromFrac(1143, 1250)},
+	{Short: "mi", Full: "mile", FullPl: "miles", Category: UnitLength, ToBase: ratFromFrac(201168, 125)},
 	{Short: "au", Full: "au", FullPl: "au", Category: UnitLength, ToBase: ratFromFrac(149597870700, 1)},
 
 	// Weight (base: grams)
 	{Short: "mg", Full: "milligram", FullPl: "milligrams", Category: UnitWeight, ToBase: ratFromFrac(1, 1000)},
 	{Short: "g", Full: "gram", FullPl: "grams", Category: UnitWeight, ToBase: ratFromFrac(1, 1)},
 	{Short: "kg", Full: "kilogram", FullPl: "kilograms", Category: UnitWeight, ToBase: ratFromFrac(1000, 1)},
-	{Short: "oz", Full: "ounce", FullPl: "ounces", Category: UnitWeight, ToBase: ratFromFloat(28.3495)},
-	{Short: "lb", Full: "pound", FullPl: "pounds", Category: UnitWeight, ToBase: ratFromFloat(453.592)},
+	{Short: "oz", Full: "ounce", FullPl: "ounces", Category: UnitWeight, ToBase: ratFromFrac(45359237, 1600000)},
+	{Short: "lb", Full: "pound", FullPl: "pounds", Category: UnitWeight, ToBase: ratFromFrac(45359237, 100000)},
 
 	// Time (base: seconds)
 	{Short: "ms", Full: "millisecond", FullPl: "milliseconds", Category: UnitTime, ToBase: ratFromFrac(1, 1000)},
@@ -64,11 +77,67 @@ var allUnits = []*Unit{
 	// Volume (base: milliliters)
 	{Short: "mL", Full: "milliliter", FullPl: "milliliters", Category: UnitVolume, ToBase: ratFromFrac(1, 1)},
 	{Short: "L", Full: "liter", FullPl: "liters", Category: UnitVolume, ToBase: ratFromFrac(1000, 1)},
-	{Short: "floz", Full: "floz", FullPl: "floz", Category: UnitVolume, ToBase: ratFromFloat(29.5735)},
-	{Short: "cup", Full: "cup", FullPl: "cups", Category: UnitVolume, ToBase: ratFromFloat(236.588)},
-	{Short: "pt", Full: "pint", FullPl: "pints", Category: UnitVolume, ToBase: ratFromFloat(473.176)},
-	{Short: "qt", Full: "quart", FullPl: "quarts", Category: UnitVolume, ToBase: ratFromFloat(946.353)},
-	{Short: "gal", Full: "gallon", FullPl: "gallons", Category: UnitVolume, ToBase: ratFromFloat(3785.41)},
+	{Short: "floz", Full: "floz", FullPl: "floz", Category: UnitVolume, ToBase: ratFromFrac(473176473, 16000000)},
+	{Short: "cup", Full: "cup", FullPl: "cups", Category: UnitVolume, ToBase: ratFromFrac(473176473, 2000000)},
+	{Short: "pt", Full: "pint", FullPl: "pints", Category: UnitVolume, ToBase: ratFromFrac(473176473, 1000000)},
+	{Short: "qt", Full: "quart", FullPl: "quarts", Category: UnitVolume, ToBase: ratFromFrac(473176473, 500000)},
+	{Short: "gal", Full: "gallon", FullPl: "gallons", Category: UnitVolume, ToBase: ratFromFrac(473176473, 125000)},
+
+	// Temperature (base: kelvin)
+	{Short: "K", Full: "kelvin", FullPl: "kelvin", Category: UnitTemperature, ToBase: ratFromFrac(1, 1), PreOffset: new(big.Rat)},
+	{Short: "C", Full: "celsius", FullPl: "celsius", Category: UnitTemperature, ToBase: ratFromFrac(1, 1), PreOffset: ratFromFrac(27315, 100)},
+	{Short: "F", Full: "fahrenheit", FullPl: "fahrenheit", Category: UnitTemperature, ToBase: ratFromFrac(5, 9), PreOffset: ratFromFrac(45967, 100)},
+
+	// Pressure (base: Pascal)
+	{Short: "Pa", Full: "pascal", FullPl: "pascals", Category: UnitPressure, ToBase: ratFromFrac(1, 1)},
+	{Short: "kPa", Full: "kilopascal", FullPl: "kilopascals", Category: UnitPressure, ToBase: ratFromFrac(1000, 1)},
+	{Short: "bar", Full: "bar", FullPl: "bars", Category: UnitPressure, ToBase: ratFromFrac(100000, 1)},
+	{Short: "atm", Full: "atmosphere", FullPl: "atmospheres", Category: UnitPressure, ToBase: ratFromFrac(101325, 1)},
+	{Short: "psi", Full: "psi", FullPl: "psi", Category: UnitPressure, ToBase: ratFromFrac(8896443230521, 1290320000)},
+
+	// Force (base: Newton)
+	{Short: "N", Full: "newton", FullPl: "newtons", Category: UnitForce, ToBase: ratFromFrac(1, 1)},
+	{Short: "kN", Full: "kilonewton", FullPl: "kilonewtons", Category: UnitForce, ToBase: ratFromFrac(1000, 1)},
+	{Short: "lbf", Full: "lbf", FullPl: "lbf", Category: UnitForce, ToBase: ratFromFrac(8896443230521, 2000000000000)},
+
+	// Energy (base: Joule)
+	{Short: "J", Full: "joule", FullPl: "joules", Category: UnitEnergy, ToBase: ratFromFrac(1, 1)},
+	{Short: "kJ", Full: "kilojoule", FullPl: "kilojoules", Category: UnitEnergy, ToBase: ratFromFrac(1000, 1)},
+	{Short: "Wh", Full: "watt-hour", FullPl: "watt-hours", Category: UnitEnergy, ToBase: ratFromFrac(3600, 1)},
+	{Short: "kWh", Full: "kilowatt-hour", FullPl: "kilowatt-hours", Category: UnitEnergy, ToBase: ratFromFrac(3600000, 1)},
+	{Short: "cal", Full: "calorie", FullPl: "calories", Category: UnitEnergy, ToBase: ratFromFrac(4184, 1000)},
+	{Short: "kcal", Full: "kilocalorie", FullPl: "kilocalories", Category: UnitEnergy, ToBase: ratFromFrac(4184, 1)},
+	{Short: "BTU", Full: "BTU", FullPl: "BTU", Category: UnitEnergy, ToBase: ratFromFrac(52752792631, 50000000)},
+
+	// Power (base: Watt)
+	{Short: "W", Full: "watt", FullPl: "watts", Category: UnitPower, ToBase: ratFromFrac(1, 1)},
+	{Short: "kW", Full: "kilowatt", FullPl: "kilowatts", Category: UnitPower, ToBase: ratFromFrac(1000, 1)},
+	{Short: "MW", Full: "megawatt", FullPl: "megawatts", Category: UnitPower, ToBase: ratFromFrac(1000000, 1)},
+	{Short: "hp", Full: "horsepower", FullPl: "horsepower", Category: UnitPower, ToBase: ratFromFrac(37284993579113511, 50000000000000)},
+
+	// Voltage (base: Volt)
+	{Short: "mV", Full: "millivolt", FullPl: "millivolts", Category: UnitVoltage, ToBase: ratFromFrac(1, 1000)},
+	{Short: "V", Full: "volt", FullPl: "volts", Category: UnitVoltage, ToBase: ratFromFrac(1, 1)},
+	{Short: "kV", Full: "kilovolt", FullPl: "kilovolts", Category: UnitVoltage, ToBase: ratFromFrac(1000, 1)},
+
+	// Current (base: Ampere)
+	{Short: "mA", Full: "milliampere", FullPl: "milliamperes", Category: UnitCurrent, ToBase: ratFromFrac(1, 1000)},
+	{Short: "A", Full: "ampere", FullPl: "amperes", Category: UnitCurrent, ToBase: ratFromFrac(1, 1)},
+
+	// Resistance (base: Ohm)
+	{Short: "ohm", Full: "ohm", FullPl: "ohms", Category: UnitResistance, ToBase: ratFromFrac(1, 1)},
+	{Short: "kohm", Full: "kilohm", FullPl: "kilohms", Category: UnitResistance, ToBase: ratFromFrac(1000, 1)},
+
+	// Data (base: bytes)
+	{Short: "B", Full: "byte", FullPl: "bytes", Category: UnitData, ToBase: ratFromFrac(1, 1)},
+	{Short: "KB", Full: "kilobyte", FullPl: "kilobytes", Category: UnitData, ToBase: ratFromFrac(1000, 1)},
+	{Short: "MB", Full: "megabyte", FullPl: "megabytes", Category: UnitData, ToBase: ratFromFrac(1000000, 1)},
+	{Short: "GB", Full: "gigabyte", FullPl: "gigabytes", Category: UnitData, ToBase: ratFromFrac(1000000000, 1)},
+	{Short: "TB", Full: "terabyte", FullPl: "terabytes", Category: UnitData, ToBase: ratFromFrac(1000000000000, 1)},
+	{Short: "KiB", Full: "kibibyte", FullPl: "kibibytes", Category: UnitData, ToBase: ratFromFrac(1024, 1)},
+	{Short: "MiB", Full: "mebibyte", FullPl: "mebibytes", Category: UnitData, ToBase: ratFromFrac(1048576, 1)},
+	{Short: "GiB", Full: "gibibyte", FullPl: "gibibytes", Category: UnitData, ToBase: ratFromFrac(1073741824, 1)},
+	{Short: "TiB", Full: "tebibyte", FullPl: "tebibytes", Category: UnitData, ToBase: ratFromFrac(1099511627776, 1)},
 }
 
 // unitLookup maps short names, full singular, and full plural to unit pointers.
@@ -147,6 +216,24 @@ func (c *CompoundUnit) String() string {
 		num = "1"
 	}
 	return num + "/" + den
+}
+
+// compoundHasOffset returns true if any unit in the compound has a non-zero PreOffset.
+func (c *CompoundUnit) HasOffset() bool {
+	if c == nil {
+		return false
+	}
+	for _, u := range c.Num {
+		if u.HasOffset() {
+			return true
+		}
+	}
+	for _, u := range c.Den {
+		if u.HasOffset() {
+			return true
+		}
+	}
+	return false
 }
 
 // Compatible checks whether two compound units are compatible for add/sub.
