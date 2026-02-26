@@ -170,8 +170,8 @@ func TestLanguageSpecVariables(t *testing.T) {
 	}{
 		{"x = 10", "10"},
 		{"x + 5", "15"},
-		{"my variable = 42", "42"},
-		{"my variable * 2", "84"},
+		{"price = 42", "42"},
+		{"price * 2", "84"},
 	}
 
 	for _, tt := range lines {

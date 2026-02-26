@@ -25,10 +25,10 @@ func Parse(tokens []Token) (Node, error) {
 
 	p := &Parser{tokens: tokens, pos: 0}
 
-	// Detect assignment: find the LAST "=" that isn't inside parens
-	lastEq := findLastEquals(tokens)
-	if lastEq >= 0 {
-		return p.parseAssignment(lastEq)
+	// Detect assignment: WORD = expr
+	eqIdx := findFirstEquals(tokens)
+	if eqIdx >= 0 {
+		return p.parseAssignment(eqIdx)
 	}
 
 	node, err := p.parseExpression()
@@ -50,47 +50,29 @@ func Parse(tokens []Token) (Node, error) {
 	return node, nil
 }
 
-// findLastEquals finds the index of the last EQUALS token not inside parentheses.
-// Returns -1 if no such token exists.
-func findLastEquals(tokens []Token) int {
-	depth := 0
-	last := -1
-	for i, t := range tokens {
-		switch t.Type {
-		case TOKEN_LPAREN:
-			depth++
-		case TOKEN_RPAREN:
-			depth--
-		case TOKEN_EQUALS:
-			if depth == 0 {
-				last = i
-			}
-		}
-	}
-	if last < 0 {
+// findFirstEquals finds the index of the first EQUALS token.
+// Returns -1 if no valid assignment pattern (single WORD starting with a letter, then =).
+func findFirstEquals(tokens []Token) int {
+	if len(tokens) < 2 {
 		return -1
 	}
-	// The LHS must be non-empty and consist only of WORD tokens
-	// to be a valid assignment
-	lhs := tokens[:last]
-	if len(lhs) == 0 {
+	// Assignment: WORD = expr, where WORD starts with a letter
+	if tokens[0].Type != TOKEN_WORD || tokens[1].Type != TOKEN_EQUALS {
 		return -1
 	}
-	for _, t := range lhs {
-		if t.Type != TOKEN_WORD {
-			return -1
-		}
+	// Variable name must start with a letter
+	if len(tokens[0].Literal) == 0 || !isLetter(rune(tokens[0].Literal[0])) {
+		return -1
 	}
-	return last
+	return 1
+}
+
+func isLetter(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }
 
 func (p *Parser) parseAssignment(eqIdx int) (Node, error) {
-	// Build variable name from LHS WORD tokens
-	var parts []string
-	for i := 0; i < eqIdx; i++ {
-		parts = append(parts, p.tokens[i].Literal)
-	}
-	name := strings.Join(parts, " ")
+	name := p.tokens[0].Literal
 
 	// Skip past the '='
 	p.pos = eqIdx + 1
@@ -368,30 +350,12 @@ func (p *Parser) parseFuncCall() (Node, error) {
 	return &FuncCall{Name: name, Args: args}, nil
 }
 
-// parseVarRef: WORD ( WORD )* — greedy, multi-word variable name.
-// Stops when the next WORD is a known unit (since that's handled by postfix).
-// But only stops for units if the current node is a number context — since
-// we're in varRef, all consecutive WORDs are the variable name.
+// parseVarRef: single WORD token as variable name.
 func (p *Parser) parseVarRef() (Node, error) {
-	var parts []string
-	for p.peek().Type == TOKEN_WORD {
-		// Don't consume a word that is a unit name if it would leave us
-		// with at least one word already collected. This prevents
-		// "price in kg" from treating "kg" as part of the variable name.
-		// However, a standalone unit name IS a valid variable name.
-		if len(parts) > 0 {
-			// Look ahead: if this word is a unit and it's the last WORD
-			// before a non-WORD token, it might be a unit. But in varRef
-			// context (not after a number), it's part of the variable name.
-			// We consume it.
-		}
-		parts = append(parts, p.advance().Literal)
-	}
-	if len(parts) == 0 {
+	if p.peek().Type != TOKEN_WORD {
 		return nil, &EvalError{Msg: "expected variable name"}
 	}
-	name := strings.Join(parts, " ")
-	return &VarRef{Name: name}, nil
+	return &VarRef{Name: p.advance().Literal}, nil
 }
 
 // parseConversion checks for "to" followed by a compound unit spec or timezone.

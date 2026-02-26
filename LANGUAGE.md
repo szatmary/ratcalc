@@ -19,7 +19,7 @@ primary     → number | "@" DATESPEC | time | funccall | varname | "(" expressi
 number      → NUMBER ( "." NUMBER )? ( "/" NUMBER )?
 time        → TIME                            // HH:MM or HH:MM:SS
 funccall    → WORD "(" [ expression ("," expression)* ] ")"
-varname     → WORD ( WORD )*                  // greedy, multi-word
+varname     → WORD                            // single word, starts with letter
 unit        → UNIT                            // matched from known units table
 ```
 
@@ -210,17 +210,15 @@ A value may carry an optional unit. Arithmetic checks unit compatibility:
 
 ## Variables
 
-Variable names may contain spaces. They are sequences of WORD tokens that do
-not match a known unit when following a number.
+Variable names are single words that must start with a letter.
 
 ```
 x = 10
-my variable = 42
-my variable * 2        → 84
+price = 42
+price * 2              → 84
 ```
 
-Assignment uses `=`. When a line contains multiple `=`, the **last** one splits
-the variable name from the expression.
+Assignment uses `=`. The variable name is the single word before the first `=`.
 
 ## Functions
 
@@ -548,8 +546,8 @@ Results use smart formatting:
 1/3 + 1/6              → 1/2
 x = 10                 → 10
 x + 5                  → 15
-my variable = 42       → 42
-my variable * 2        → 84
+price = 42             → 42
+price * 2              → 84
 5 meters + 100 cm      → 6 m
 10 miles / gallon      → 10 mi/gal
 100 mi / 5 gal         → 20 mi/gal

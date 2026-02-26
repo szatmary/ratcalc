@@ -57,23 +57,23 @@ func TestVariables(t *testing.T) {
 	}
 }
 
-func TestMultiWordVariables(t *testing.T) {
+func TestSingleWordVariables(t *testing.T) {
 	env := make(Env)
 
-	val, err := EvalLine("my variable = 42", env)
+	val, err := EvalLine("price = 42", env)
 	if err != nil {
 		t.Fatalf("assignment error: %v", err)
 	}
 	if val.String() != "42" {
-		t.Errorf("my variable = 42 gave %q, want 42", val.String())
+		t.Errorf("price = 42 gave %q, want 42", val.String())
 	}
 
-	val, err = EvalLine("my variable * 2", env)
+	val, err = EvalLine("price * 2", env)
 	if err != nil {
-		t.Fatalf("my variable * 2 error: %v", err)
+		t.Fatalf("price * 2 error: %v", err)
 	}
 	if val.String() != "84" {
-		t.Errorf("my variable * 2 = %q, want 84", val.String())
+		t.Errorf("price * 2 = %q, want 84", val.String())
 	}
 }
 
