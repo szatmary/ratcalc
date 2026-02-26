@@ -429,14 +429,7 @@ function getCurrentLine() {
 function updateHighlight() {
   var cur = getCurrentLine();
   highlightDiv.innerHTML = buildHighlight(editor.value, cur);
-  var lnDivs = lineNumbers.children;
-  var rsDivs = resultsDiv.children;
-  for (var i = 0; i < lnDivs.length; i++) {
-    lnDivs[i].classList.toggle('hl-line', i === cur);
-  }
-  for (var i = 0; i < rsDivs.length; i++) {
-    rsDivs[i].classList.toggle('hl-line', i === cur);
-  }
+  applyGutterHighlight();
 }
 
 function measureMaxChars() {
@@ -481,6 +474,19 @@ function runEval(nowTicked) {
     }
   }
   resultsDiv.innerHTML = rHtml;
+  applyGutterHighlight();
+}
+
+function applyGutterHighlight() {
+  var cur = getCurrentLine();
+  var lnDivs = lineNumbers.children;
+  var rsDivs = resultsDiv.children;
+  for (var i = 0; i < lnDivs.length; i++) {
+    lnDivs[i].classList.toggle('hl-line', i === cur);
+  }
+  for (var i = 0; i < rsDivs.length; i++) {
+    rsDivs[i].classList.toggle('hl-line', i === cur);
+  }
 }
 
 function clearEditor() {
