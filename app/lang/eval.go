@@ -195,7 +195,7 @@ func evalTimeLit(raw string) (Value, error) {
 	now := time.Now().UTC()
 	t := time.Date(now.Year(), now.Month(), now.Day(), h, m, s, 0, time.UTC)
 	r := new(big.Rat).SetInt64(t.Unix())
-	return Value{Rat: r, IsTime: true}, nil
+	return Value{Rat: r, Unit: TimestampUnit()}, nil
 }
 
 func evalAMPM(n *AMPMExpr, env Env) (Value, error) {
@@ -203,7 +203,7 @@ func evalAMPM(n *AMPMExpr, env Env) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "AM/PM can only be applied to time values"}
 	}
 	// Extract the hour from the UTC time
@@ -234,7 +234,7 @@ func evalTZExpr(n *TZExpr, env Env) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "timezone can only be applied to time values"}
 	}
 	loc := LookupTimezone(n.TZ)
@@ -263,9 +263,6 @@ func evalMathFunc1(n *FuncCall, env Env, fn func(float64) float64) (Value, error
 	if val.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires a dimensionless value"}
 	}
-	if val.IsTime {
-		return Value{}, &EvalError{Msg: n.Name + "() cannot operate on time values"}
-	}
 	f, _ := val.Rat.Float64()
 	result := fn(f)
 	r := new(big.Rat).SetFloat64(result)
@@ -287,10 +284,10 @@ func evalMathFunc2(n *FuncCall, env Env, fn func(float64, float64) float64) (Val
 	if err != nil {
 		return Value{}, err
 	}
-	if a.Unit != nil || a.IsTime {
+	if a.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
-	if b.Unit != nil || b.IsTime {
+	if b.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
 	af, _ := a.Rat.Float64()
@@ -313,7 +310,7 @@ func evalFinanceFunc3(n *FuncCall, env Env, fn func(float64, float64, float64) f
 		if err != nil {
 			return Value{}, err
 		}
-		if v.Unit != nil || v.IsTime {
+		if v.Unit != nil {
 			return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 		}
 		vals[i], _ = v.Rat.Float64()
@@ -334,7 +331,7 @@ func evalTimeExtract(n *FuncCall, env Env, extract func(time.Time) int) (Value, 
 	if err != nil {
 		return Value{}, err
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		return Value{}, &EvalError{Msg: n.Name + "() requires a time value"}
 	}
 	unix := val.Rat.Num().Int64() / val.Rat.Denom().Int64()
@@ -386,9 +383,6 @@ func evalRatFunc1(n *FuncCall, env Env, fn func(*big.Rat) *big.Rat) (Value, erro
 	if val.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires a dimensionless value"}
 	}
-	if val.IsTime {
-		return Value{}, &EvalError{Msg: n.Name + "() cannot operate on time values"}
-	}
 	return Value{Rat: fn(val.Rat), Base: 10}, nil
 }
 
@@ -404,10 +398,10 @@ func evalRatFunc2(n *FuncCall, env Env, fn func(*big.Rat, *big.Rat) *big.Rat) (V
 	if err != nil {
 		return Value{}, err
 	}
-	if a.Unit != nil || a.IsTime {
+	if a.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
-	if b.Unit != nil || b.IsTime {
+	if b.Unit != nil {
 		return Value{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
 	return Value{Rat: fn(a.Rat, b.Rat), Base: 10}, nil
@@ -425,10 +419,10 @@ func evalPow(n *FuncCall, env Env) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if base.Unit != nil || base.IsTime {
+	if base.Unit != nil {
 		return Value{}, &EvalError{Msg: "pow() requires dimensionless values"}
 	}
-	if exp.Unit != nil || exp.IsTime {
+	if exp.Unit != nil {
 		return Value{}, &EvalError{Msg: "pow() requires dimensionless values"}
 	}
 	// If exponent is integer, use exact rational arithmetic
@@ -462,7 +456,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 			return Value{}, &EvalError{Msg: "now() takes no arguments"}
 		}
 		r := new(big.Rat).SetInt64(time.Now().Unix())
-		return Value{Rat: r, IsTime: true}, nil
+		return Value{Rat: r, Unit: TimestampUnit()}, nil
 
 	case "date":
 		if len(n.Args) != 3 && len(n.Args) != 6 {
@@ -486,7 +480,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 			t = time.Date(vals[0], time.Month(vals[1]), vals[2], vals[3], vals[4], vals[5], 0, time.UTC)
 		}
 		r := new(big.Rat).SetInt64(t.Unix())
-		return Value{Rat: r, IsTime: true}, nil
+		return Value{Rat: r, Unit: TimestampUnit()}, nil
 
 	case "time":
 		if len(n.Args) != 2 && len(n.Args) != 3 {
@@ -514,7 +508,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 		now := time.Now().UTC()
 		tt := time.Date(now.Year(), now.Month(), now.Day(), h, m, s, 0, time.UTC)
 		r := new(big.Rat).SetInt64(tt.Unix())
-		return Value{Rat: r, IsTime: true}, nil
+		return Value{Rat: r, Unit: TimestampUnit()}, nil
 
 	case "__to_unix":
 		if len(n.Args) != 1 {
@@ -524,7 +518,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 		if err != nil {
 			return Value{}, err
 		}
-		if !val.IsTime {
+		if !val.IsTimestamp() {
 			return Value{}, &EvalError{Msg: "to unix requires a time value"}
 		}
 		return Value{Rat: new(big.Rat).Set(val.Rat), Base: 10}, nil
@@ -549,7 +543,11 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 		case "__to_oct":
 			base = 8
 		}
-		return Value{Rat: new(big.Rat).Set(val.Rat), Unit: val.Unit, Base: base}, nil
+		u := val.Unit
+		if val.IsTimestamp() {
+			u = nil
+		}
+		return Value{Rat: new(big.Rat).Set(val.Rat), Unit: u, Base: base}, nil
 
 	case "unix":
 		if len(n.Args) != 1 {
@@ -563,7 +561,7 @@ func evalFuncCall(n *FuncCall, env Env) (Value, error) {
 			return Value{}, &EvalError{Msg: "unix() value must be dimensionless"}
 		}
 		r := autoDetectUnixPrecision(val.Rat)
-		return Value{Rat: r, IsTime: true}, nil
+		return Value{Rat: r, Unit: TimestampUnit()}, nil
 
 	case "sin":
 		return evalMathFunc1(n, env, math.Sin)

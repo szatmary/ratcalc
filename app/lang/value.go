@@ -19,18 +19,22 @@ import (
 //	8  — octal:   prefix 0o, integer only
 //	16 — hex:     prefix 0x, integer only
 type Value struct {
-	Rat    *big.Rat
-	Unit   *CompoundUnit  // nil means dimensionless
-	IsTime bool           // when true, Rat holds unix seconds and Unit must be nil
-	TZ     *time.Location // display timezone for time values; nil means UTC
-	Base   int            // display base (see Value doc)
+	Rat  *big.Rat
+	Unit *CompoundUnit  // nil means dimensionless; TimestampUnit() means absolute timestamp
+	TZ   *time.Location // display timezone for time values; nil means UTC
+	Base int            // display base (see Value doc)
+}
+
+// IsTimestamp returns true if the value represents an absolute point in time.
+func (v Value) IsTimestamp() bool {
+	return v.Unit != nil && len(v.Unit.Num) == 1 && len(v.Unit.Den) == 0 && v.Unit.Num[0] == tsUnit
 }
 
 // String formats the value for display.
 // Simple fractions (denom <= 1000, not integer) display as fractions.
 // Otherwise display as decimal. Appends unit string if present.
 func (v Value) String() string {
-	if v.IsTime {
+	if v.IsTimestamp() {
 		sec := v.Rat.Num().Int64() / v.Rat.Denom().Int64()
 		t := time.Unix(sec, 0).UTC()
 		if v.TZ != nil {
@@ -177,24 +181,24 @@ func (e *EvalError) Error() string {
 
 func valAdd(a, b Value) (Value, error) {
 	// Time guards
-	if a.IsTime && b.IsTime {
+	if a.IsTimestamp() && b.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "cannot add two times"}
 	}
-	if a.IsTime && !b.IsTime {
+	if a.IsTimestamp() && !b.IsTimestamp() {
 		if b.Unit != nil && isSimpleTimeUnit(b.Unit) {
 			// time + duration = time
 			secs := durationToSeconds(b)
 			r := new(big.Rat).Add(a.Rat, secs)
-			return Value{Rat: r, IsTime: true, TZ: a.TZ}, nil
+			return Value{Rat: r, Unit: TimestampUnit(), TZ: a.TZ}, nil
 		}
 		return Value{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
 	}
-	if !a.IsTime && b.IsTime {
+	if !a.IsTimestamp() && b.IsTimestamp() {
 		if a.Unit != nil && isSimpleTimeUnit(a.Unit) {
 			// duration + time = time
 			secs := durationToSeconds(a)
 			r := new(big.Rat).Add(secs, b.Rat)
-			return Value{Rat: r, IsTime: true, TZ: b.TZ}, nil
+			return Value{Rat: r, Unit: TimestampUnit(), TZ: b.TZ}, nil
 		}
 		return Value{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
 	}
@@ -219,21 +223,21 @@ func valAdd(a, b Value) (Value, error) {
 
 func valSub(a, b Value) (Value, error) {
 	// Time guards
-	if a.IsTime && b.IsTime {
+	if a.IsTimestamp() && b.IsTimestamp() {
 		// time - time = duration in seconds
 		r := new(big.Rat).Sub(a.Rat, b.Rat)
 		return Value{Rat: r, Unit: SimpleUnit(SecondsUnit())}, nil
 	}
-	if a.IsTime && !b.IsTime {
+	if a.IsTimestamp() && !b.IsTimestamp() {
 		if b.Unit != nil && isSimpleTimeUnit(b.Unit) {
 			// time - duration = time
 			secs := durationToSeconds(b)
 			r := new(big.Rat).Sub(a.Rat, secs)
-			return Value{Rat: r, IsTime: true, TZ: a.TZ}, nil
+			return Value{Rat: r, Unit: TimestampUnit(), TZ: a.TZ}, nil
 		}
 		return Value{}, &EvalError{Msg: "cannot subtract from time: use a time unit (s, min, hr, d, etc.)"}
 	}
-	if b.IsTime {
+	if b.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "cannot subtract time from non-time value"}
 	}
 
@@ -255,7 +259,7 @@ func valSub(a, b Value) (Value, error) {
 }
 
 func valMul(a, b Value) (Value, error) {
-	if a.IsTime || b.IsTime {
+	if a.IsTimestamp() || b.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "cannot multiply time values"}
 	}
 	r := new(big.Rat).Mul(a.Rat, b.Rat)
@@ -264,7 +268,7 @@ func valMul(a, b Value) (Value, error) {
 }
 
 func valDiv(a, b Value) (Value, error) {
-	if a.IsTime || b.IsTime {
+	if a.IsTimestamp() || b.IsTimestamp() {
 		return Value{}, &EvalError{Msg: "cannot divide time values"}
 	}
 	if b.Rat.Sign() == 0 {
@@ -278,7 +282,7 @@ func valDiv(a, b Value) (Value, error) {
 
 func valNeg(a Value) Value {
 	r := new(big.Rat).Neg(a.Rat)
-	return Value{Rat: r, Unit: a.Unit, IsTime: a.IsTime, TZ: a.TZ}
+	return Value{Rat: r, Unit: a.Unit, TZ: a.TZ}
 }
 
 // mergeUnits merges compound units for multiplication.

@@ -230,7 +230,7 @@ func TestLanguageSpecNowArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("now() - @2024-01-01 error: %v", err)
 	}
-	if val.IsTime {
+	if val.IsTimestamp() {
 		t.Error("expected duration (not time) from now() - @date")
 	}
 	if val.Unit == nil || val.Unit.String() != "s" {
@@ -242,7 +242,7 @@ func TestLanguageSpecNowArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("now() to unix error: %v", err)
 	}
-	if val.IsTime {
+	if val.IsTimestamp() {
 		t.Error("expected IsTime=false after to unix")
 	}
 	if val.Rat.Sign() <= 0 {

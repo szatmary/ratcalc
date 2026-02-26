@@ -279,7 +279,7 @@ func TestUnixFunction(t *testing.T) {
 	if got != want {
 		t.Errorf("unix(1706745600) = %q, want %q", got, want)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true")
 	}
 }
@@ -306,7 +306,7 @@ func TestTounix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("to unix error: %v", err)
 	}
-	if val.IsTime {
+	if val.IsTimestamp() {
 		t.Error("expected IsTime=false after to unix")
 	}
 	got := val.String()
@@ -339,7 +339,7 @@ func TestDateFunction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("date(2024, 1, 31) error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for date()")
 	}
 	got := val.String()
@@ -368,7 +368,7 @@ func TestTimeFunction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time(14, 30) error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for time()")
 	}
 	got := val.String()
@@ -395,7 +395,7 @@ func TestAtDateLiteral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("@2024-01-31 error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for @date")
 	}
 	got := val.String()
@@ -458,7 +458,7 @@ func TestAtTimeLiteral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("@14:30 error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for @time")
 	}
 	got := val.String()
@@ -485,7 +485,7 @@ func TestAtUnixLiteral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("@1706745600 error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for @unix")
 	}
 	got := val.String()
@@ -517,7 +517,7 @@ func TestDateVsArithmetic(t *testing.T) {
 	if got != "1992" {
 		t.Errorf("2024-01-31 = %q, want 1992", got)
 	}
-	if val.IsTime {
+	if val.IsTimestamp() {
 		t.Error("expected IsTime=false for arithmetic")
 	}
 
@@ -540,7 +540,7 @@ func TestTimeArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time+duration error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected time+duration to be time")
 	}
 	want := "2024-02-01 00:00:00 +0000"
@@ -553,7 +553,7 @@ func TestTimeArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time+24hr error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected time+24hr to be time")
 	}
 	if val.String() != want {
@@ -565,7 +565,7 @@ func TestTimeArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time+1d error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected time+1d to be time")
 	}
 	if val.String() != want {
@@ -577,7 +577,7 @@ func TestTimeArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time-time error: %v", err)
 	}
-	if val.IsTime {
+	if val.IsTimestamp() {
 		t.Error("expected time-time to be duration, not time")
 	}
 	if val.String() != "86400 s" {
@@ -607,7 +607,7 @@ func TestTimeArithmetic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("time-duration error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected time-duration to be time")
 	}
 	wantSub := "2024-01-31 23:00:00 +0000"
@@ -654,7 +654,7 @@ func TestTimezoneConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("12:00 PST error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true")
 	}
 	// 12:00 PST = 20:00 UTC. Display should show PST.
@@ -688,7 +688,7 @@ func TestTimezoneConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("now() to EST error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for now() to EST")
 	}
 	got = val.String()
@@ -752,7 +752,7 @@ func TestTimeLiteral(t *testing.T) {
 	if err != nil {
 		t.Fatalf("14:30 error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected IsTime=true for time literal")
 	}
 	got := val.String()
@@ -826,7 +826,7 @@ func TestNow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("now() error: %v", err)
 	}
-	if !val.IsTime {
+	if !val.IsTimestamp() {
 		t.Error("expected now() to return time")
 	}
 	// Just check the format is correct

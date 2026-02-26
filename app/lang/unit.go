@@ -22,6 +22,7 @@ const (
 	UnitCurrent
 	UnitResistance
 	UnitData
+	UnitTimestamp
 )
 
 // Unit defines a unit with its category and conversion factor to the base unit.
@@ -161,6 +162,14 @@ func LookupUnit(name string) *Unit {
 // SecondsUnit returns the "s" unit entry.
 func SecondsUnit() *Unit {
 	return unitLookup["s"]
+}
+
+// tsUnit is a private sentinel unit for absolute timestamps (unix seconds).
+var tsUnit = &Unit{Short: "timestamp", Category: UnitTimestamp, ToBase: ratFromFrac(1, 1)}
+
+// TimestampUnit returns a CompoundUnit representing an absolute timestamp.
+func TimestampUnit() *CompoundUnit {
+	return SimpleUnit(tsUnit)
 }
 
 // Convert converts a rational value from one unit to another within the same category.

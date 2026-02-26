@@ -193,12 +193,12 @@ func (es *EvalState) EvalAllIncremental(lines []string, nowTicked bool) []EvalRe
 			results[i] = EvalResult{Text: val.String()}
 			if cached.Deps.Assigns != "" {
 				env[cached.Deps.Assigns] = val
-				if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTime != val.IsTime {
+				if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTimestamp() != val.IsTimestamp() {
 					changedVars[cached.Deps.Assigns] = true
 				}
 			}
 			env[lineRef(i)] = val
-			if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTime != val.IsTime {
+			if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTimestamp() != val.IsTimestamp() {
 				changedVars[lineRef(i)] = true
 			}
 		}
