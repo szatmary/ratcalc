@@ -124,7 +124,7 @@ func Eval(node Node, env Env) (Value, error) {
 			// Offset-based conversion (temperature) — values stored in display units
 			if valCU.HasOffset() || n.Unit.HasOffset() {
 				// Offset units only allowed as simple units
-				if val.Den.Unit != nil || n.Unit.Den != nil {
+				if val.Den.Unit != numUnit || n.Unit.Den != numUnit {
 					return Value{}, &EvalError{Msg: "temperature units cannot be used in compound units"}
 				}
 				from := val.Num.Unit
@@ -153,12 +153,12 @@ func Eval(node Node, env Env) (Value, error) {
 		}
 		var numRat big.Rat
 		numRat.Set(eff)
-		if n.Unit.Num != nil {
+		if n.Unit.Num != numUnit {
 			numRat.Mul(&numRat, &n.Unit.Num.ToBase)
 		}
 		var denRat big.Rat
 		denRat.SetInt64(1)
-		if n.Unit.Den != nil {
+		if n.Unit.Den != numUnit {
 			denRat.Mul(&denRat, &n.Unit.Den.ToBase)
 		}
 		return Value{Num: CatVal{Rat: numRat, Unit: n.Unit.Num}, Den: CatVal{Rat: denRat, Unit: n.Unit.Den}}, nil

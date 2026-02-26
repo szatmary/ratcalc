@@ -8,10 +8,10 @@ import (
 )
 
 // CatVal pairs a rational value (in base units) with its unit.
-// The Rat holds the magnitude in base-unit terms. Unit is nil for dimensionless.
+// The Rat holds the magnitude in base-unit terms. Unit is numUnit for dimensionless.
 type CatVal struct {
 	big.Rat
-	Unit *Unit // nil = dimensionless
+	Unit *Unit // numUnit = dimensionless
 }
 
 // Value represents a rational number with optional compound units.
@@ -33,10 +33,11 @@ type Value struct {
 	Display any // display hint (see Value doc)
 }
 
-// oneCatVal returns a CatVal with Rat=1 and Unit=nil (dimensionless 1).
+// oneCatVal returns a CatVal with Rat=1 and Unit=numUnit (dimensionless 1).
 func oneCatVal() CatVal {
 	var cv CatVal
 	cv.Rat.SetInt64(1)
+	cv.Unit = numUnit
 	return cv
 }
 
@@ -44,13 +45,14 @@ func oneCatVal() CatVal {
 func dimless(r *big.Rat) Value {
 	var v Value
 	v.Num.Rat.Set(r)
+	v.Num.Unit = numUnit
 	v.Den = oneCatVal()
 	return v
 }
 
 // IsTimestamp returns true if the value represents an absolute point in time.
 func (v Value) IsTimestamp() bool {
-	return v.Num.Unit == tsUnit && v.Den.Unit == nil
+	return v.Num.Unit == tsUnit && v.Den.Unit == numUnit
 }
 
 // CompoundUnit reconstructs the CompoundUnit for display.
@@ -58,9 +60,9 @@ func (v Value) CompoundUnit() CompoundUnit {
 	return CompoundUnit{Num: v.Num.Unit, Den: v.Den.Unit}
 }
 
-// IsEmpty returns true if both units are nil (dimensionless).
+// IsEmpty returns true if both units are dimensionless.
 func (v Value) IsEmpty() bool {
-	return v.Num.Unit == nil && v.Den.Unit == nil
+	return v.Num.Unit.Category == UnitNumber && v.Den.Unit.Category == UnitNumber
 }
 
 // effectiveRat returns Num.Rat / Den.Rat as a new *big.Rat.
@@ -84,11 +86,11 @@ func (v Value) DisplayRat() *big.Rat {
 	}
 	r := v.effectiveRat()
 	// Convert numerator from base to display units
-	if v.Num.Unit != nil && !v.Num.Unit.HasOffset() {
+	if v.Num.Unit != numUnit && !v.Num.Unit.HasOffset() {
 		r.Quo(r, &v.Num.Unit.ToBase)
 	}
 	// Convert denominator from base to display units (inverse)
-	if v.Den.Unit != nil && !v.Den.Unit.HasOffset() {
+	if v.Den.Unit != numUnit && !v.Den.Unit.HasOffset() {
 		r.Mul(r, &v.Den.Unit.ToBase)
 	}
 	return r
@@ -381,23 +383,23 @@ func valDiv(a, b Value) (Value, error) {
 // denA, denB are the two units going into the denominator.
 // If a category appears on both sides, it cancels.
 // After cancellation, each side must have at most 1 category.
-func cancelUnits(numA, numB, denA, denB *Unit) (numUnit, denUnit *Unit, err error) {
-	// Collect non-nil units per side
+func cancelUnits(numA, numB, denA, denB *Unit) (resNum, resDen *Unit, err error) {
+	// Collect non-dimensionless units per side
 	type catUnit struct {
 		cat  UnitCategory
 		unit *Unit
 	}
 	var nums, dens []catUnit
-	if numA != nil {
+	if numA != numUnit {
 		nums = append(nums, catUnit{numA.Category, numA})
 	}
-	if numB != nil {
+	if numB != numUnit {
 		nums = append(nums, catUnit{numB.Category, numB})
 	}
-	if denA != nil {
+	if denA != numUnit {
 		dens = append(dens, catUnit{denA.Category, denA})
 	}
-	if denB != nil {
+	if denB != numUnit {
 		dens = append(dens, catUnit{denB.Category, denB})
 	}
 
@@ -415,19 +417,21 @@ func cancelUnits(numA, numB, denA, denB *Unit) (numUnit, denUnit *Unit, err erro
 	}
 
 	if len(nums) > 1 {
-		return nil, nil, &EvalError{Msg: "cannot combine units"}
+		return numUnit, numUnit, &EvalError{Msg: "cannot combine units"}
 	}
 	if len(dens) > 1 {
-		return nil, nil, &EvalError{Msg: "cannot combine units"}
+		return numUnit, numUnit, &EvalError{Msg: "cannot combine units"}
 	}
 
+	resNum = numUnit
+	resDen = numUnit
 	if len(nums) == 1 {
-		numUnit = nums[0].unit
+		resNum = nums[0].unit
 	}
 	if len(dens) == 1 {
-		denUnit = dens[0].unit
+		resDen = dens[0].unit
 	}
-	return numUnit, denUnit, nil
+	return resNum, resDen, nil
 }
 
 func valNeg(a Value) Value {
@@ -438,19 +442,13 @@ func valNeg(a Value) Value {
 
 // hasTimeUnit returns true if any unit in the value is a time-category unit.
 func hasTimeUnit(u CompoundUnit) bool {
-	if u.Num != nil && u.Num.Category == UnitTime {
-		return true
-	}
-	if u.Den != nil && u.Den.Category == UnitTime {
-		return true
-	}
-	return false
+	return u.Num.Category == UnitTime || u.Den.Category == UnitTime
 }
 
 // isSimpleTimeUnit returns true if the value has a single numerator unit
 // in the UnitTime category with no denominator unit. This identifies durations.
 func isSimpleTimeUnit(v Value) bool {
-	return v.Num.Unit != nil && v.Num.Unit.Category == UnitTime && v.Den.Unit == nil
+	return v.Num.Unit.Category == UnitTime && v.Den.Unit == numUnit
 }
 
 // durationToSeconds returns the duration in seconds.
@@ -462,11 +460,11 @@ func durationToSeconds(v Value) *big.Rat {
 // compoundConversionFactor computes the conversion factor from compound unit `from` to `to`.
 func compoundConversionFactor(from, to CompoundUnit) *big.Rat {
 	factor := new(big.Rat).SetInt64(1)
-	if from.Num != nil && to.Num != nil {
+	if from.Num != numUnit && to.Num != numUnit {
 		f := new(big.Rat).Quo(&from.Num.ToBase, &to.Num.ToBase)
 		factor.Mul(factor, f)
 	}
-	if from.Den != nil && to.Den != nil {
+	if from.Den != numUnit && to.Den != numUnit {
 		f := new(big.Rat).Quo(&to.Den.ToBase, &from.Den.ToBase)
 		factor.Mul(factor, f)
 	}

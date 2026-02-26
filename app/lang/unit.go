@@ -8,7 +8,8 @@ import (
 type UnitCategory int
 
 const (
-	UnitLength UnitCategory = iota
+	UnitNumber UnitCategory = iota
+	UnitLength
 	UnitWeight
 	UnitTime
 	UnitVolume
@@ -165,6 +166,9 @@ func SecondsUnit() *Unit {
 	return unitLookup["s"]
 }
 
+// numUnit is a private sentinel unit for dimensionless (plain number) values.
+var numUnit = &Unit{Short: "", Category: UnitNumber, ToBase: ratFromFrac(1, 1)}
+
 // tsUnit is a private sentinel unit for absolute timestamps (unix seconds).
 var tsUnit = &Unit{Short: "timestamp", Category: UnitTimestamp, ToBase: ratFromFrac(1, 1)}
 
@@ -187,20 +191,20 @@ func Convert(val *big.Rat, from, to *Unit) (*big.Rat, error) {
 }
 
 // CompoundUnit represents a compound unit like mi/gal.
-// The zero value (both nil) represents dimensionless.
+// Dimensionless values use numUnit for both Num and Den.
 type CompoundUnit struct {
-	Num *Unit // nil = dimensionless numerator
-	Den *Unit // nil = no denominator
+	Num *Unit // numUnit = dimensionless numerator
+	Den *Unit // numUnit = no denominator
 }
 
 // SimpleUnit creates a CompoundUnit from a single unit.
 func SimpleUnit(u *Unit) CompoundUnit {
-	return CompoundUnit{Num: u}
+	return CompoundUnit{Num: u, Den: numUnit}
 }
 
-// IsEmpty returns true if there are no units.
+// IsEmpty returns true if there are no units (both dimensionless).
 func (c CompoundUnit) IsEmpty() bool {
-	return c.Num == nil && c.Den == nil
+	return c.Num.Category == UnitNumber && c.Den.Category == UnitNumber
 }
 
 // String formats the compound unit for display.
@@ -209,10 +213,10 @@ func (c CompoundUnit) String() string {
 		return ""
 	}
 	num := ""
-	if c.Num != nil {
+	if c.Num.Category != UnitNumber {
 		num = c.Num.Short
 	}
-	if c.Den == nil {
+	if c.Den.Category == UnitNumber {
 		return num
 	}
 	if num == "" {
@@ -223,13 +227,7 @@ func (c CompoundUnit) String() string {
 
 // HasOffset returns true if any unit in the compound has an offset-based conversion.
 func (c CompoundUnit) HasOffset() bool {
-	if c.Num != nil && c.Num.HasOffset() {
-		return true
-	}
-	if c.Den != nil && c.Den.HasOffset() {
-		return true
-	}
-	return false
+	return c.Num.HasOffset() || c.Den.HasOffset()
 }
 
 // Compatible checks whether two compound units are compatible for add/sub.
@@ -243,13 +241,7 @@ func (c CompoundUnit) Compatible(other CompoundUnit) bool {
 	return true
 }
 
-// unitPtrCatEqual checks if two *Unit pointers have the same category (or both nil).
+// unitPtrCatEqual checks if two *Unit pointers have the same category.
 func unitPtrCatEqual(a, b *Unit) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
 	return a.Category == b.Category
 }

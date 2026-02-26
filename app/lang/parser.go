@@ -471,7 +471,7 @@ func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
 	if u == nil {
 		return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + first.Literal}
 	}
-	cu := CompoundUnit{Num: u}
+	cu := CompoundUnit{Num: u, Den: numUnit}
 
 	if p.peek().Type == TOKEN_SLASH {
 		p.advance() // consume '/'
