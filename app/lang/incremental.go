@@ -16,7 +16,7 @@ type DepsInfo struct {
 type CachedLine struct {
 	Text    string
 	Node    Node
-	Result  Value
+	Result  CompoundValue
 	Err     error
 	Deps    DepsInfo
 	IsEmpty bool // line was blank or comment
@@ -141,7 +141,7 @@ func (es *EvalState) EvalAllIncremental(lines []string, nowTicked bool) []EvalRe
 
 		if isEmpty {
 			cached.Node = nil
-			cached.Result = Value{}
+			cached.Result = CompoundValue{}
 			cached.Err = nil
 			cached.Deps = DepsInfo{}
 			results[i] = EvalResult{}
@@ -152,7 +152,7 @@ func (es *EvalState) EvalAllIncremental(lines []string, nowTicked bool) []EvalRe
 		node, err := ParseLine(line)
 		if err != nil {
 			cached.Node = nil
-			cached.Result = Value{}
+			cached.Result = CompoundValue{}
 			cached.Err = err
 			cached.Deps = DepsInfo{}
 			results[i] = EvalResult{Text: err.Error(), IsErr: true}
@@ -160,7 +160,7 @@ func (es *EvalState) EvalAllIncremental(lines []string, nowTicked bool) []EvalRe
 		}
 		if node == nil {
 			cached.Node = nil
-			cached.Result = Value{}
+			cached.Result = CompoundValue{}
 			cached.Err = &EvalError{Msg: ""}
 			cached.Deps = DepsInfo{}
 			cached.IsEmpty = true

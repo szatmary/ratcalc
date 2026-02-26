@@ -198,7 +198,7 @@ func (p *Parser) parsePostfix() (Node, error) {
 		u := LookupUnit(p.peek().Literal)
 		if u != nil {
 			p.advance() // consume the unit token
-			return &UnitExpr{Expr: node, Unit: SimpleUnit(u)}, nil
+			return &UnitExpr{Expr: node, Unit: SimpleUnit(*u)}, nil
 		}
 	}
 
@@ -471,7 +471,7 @@ func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
 	if u == nil {
 		return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + first.Literal}
 	}
-	cu := CompoundUnit{Num: u, Den: numUnit}
+	cu := CompoundUnit{Num: *u, Den: numUnit}
 
 	if p.peek().Type == TOKEN_SLASH {
 		p.advance() // consume '/'
@@ -483,7 +483,7 @@ func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
 		if den == nil {
 			return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + word.Literal}
 		}
-		cu.Den = den
+		cu.Den = *den
 	}
 	return cu, nil
 }
@@ -547,7 +547,7 @@ func parseAtLiteral(lit string) (Node, error) {
 		if offsetSeconds != 0 {
 			offsetNode := &UnitExpr{
 				Expr: &NumberLit{Value: new(big.Rat).SetInt64(offsetSeconds)},
-				Unit: SimpleUnit(SecondsUnit()),
+				Unit: SimpleUnit(*SecondsUnit()),
 			}
 			node = &BinaryExpr{Op: TOKEN_MINUS, Left: node, Right: offsetNode}
 		}

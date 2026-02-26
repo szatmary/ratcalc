@@ -32,10 +32,12 @@ type Unit struct {
 	FullPl   string       // full plural name (e.g. "meters")
 	Category UnitCategory
 	// ToBase is the conversion factor: value_in_base = (value + PreOffset) * ToBase
-	ToBase big.Rat
-	// PreOffset is added before multiplying by ToBase. Used for temperature.
-	// Zero value means no offset.
-	PreOffset big.Rat
+	// big.Rat for physical units, int for display base (10/2/8/16).
+	ToBase any
+	// PreOffset is added before multiplying by ToBase.
+	// big.Rat for temperature offset, time.Location for timezone.
+	// nil means no offset.
+	PreOffset any
 }
 
 // HasOffset returns true if this unit uses an offset-based conversion (temperature).
@@ -47,6 +49,24 @@ func ratFromFrac(num, denom int64) big.Rat {
 	var r big.Rat
 	r.SetFrac64(num, denom)
 	return r
+}
+
+// toBaseRat extracts the big.Rat conversion factor from a Unit's ToBase field.
+// Returns a pointer to a copy. Defaults to 1/1 if ToBase is nil or non-Rat.
+func toBaseRat(u Unit) *big.Rat {
+	if r, ok := u.ToBase.(big.Rat); ok {
+		return new(big.Rat).Set(&r)
+	}
+	return new(big.Rat).SetInt64(1)
+}
+
+// preOffsetRat extracts the big.Rat offset from a Unit's PreOffset field.
+// Returns a pointer to a copy. Defaults to 0/1 if PreOffset is nil or non-Rat.
+func preOffsetRat(u Unit) *big.Rat {
+	if r, ok := u.PreOffset.(big.Rat); ok {
+		return new(big.Rat).Set(&r)
+	}
+	return new(big.Rat)
 }
 
 var allUnits = []*Unit{
@@ -166,11 +186,19 @@ func SecondsUnit() *Unit {
 	return unitLookup["s"]
 }
 
-// numUnit is a private sentinel unit for dimensionless (plain number) values.
-var numUnit = &Unit{Short: "", Category: UnitNumber, ToBase: ratFromFrac(1, 1)}
+// numUnit is a sentinel unit for dimensionless (plain number) values.
+var numUnit = Unit{Short: "", Category: UnitNumber, ToBase: ratFromFrac(1, 1)}
 
-// tsUnit is a private sentinel unit for absolute timestamps (unix seconds).
-var tsUnit = &Unit{Short: "timestamp", Category: UnitTimestamp, ToBase: ratFromFrac(1, 1)}
+// tsUnit is a sentinel unit for absolute timestamps (unix seconds) with no timezone.
+var tsUnit = Unit{Short: "timestamp", Category: UnitTimestamp, ToBase: ratFromFrac(1, 1)}
+
+// Display-base sentinels: ToBase is an int indicating the display base.
+var (
+	decUnit = Unit{Short: "", Category: UnitNumber, ToBase: 10}
+	hexUnit = Unit{Short: "", Category: UnitNumber, ToBase: 16}
+	binUnit = Unit{Short: "", Category: UnitNumber, ToBase: 2}
+	octUnit = Unit{Short: "", Category: UnitNumber, ToBase: 8}
+)
 
 // TimestampUnit returns a CompoundUnit representing an absolute timestamp.
 func TimestampUnit() CompoundUnit {
@@ -183,22 +211,20 @@ func Convert(val *big.Rat, from, to *Unit) (*big.Rat, error) {
 	if from.Category != to.Category {
 		return nil, &EvalError{Msg: "cannot convert between " + from.Short + " and " + to.Short}
 	}
-	// val_base = val * from.ToBase
-	// result = val_base / to.ToBase
-	result := new(big.Rat).Mul(val, &from.ToBase)
-	result.Quo(result, &to.ToBase)
+	result := new(big.Rat).Mul(val, toBaseRat(*from))
+	result.Quo(result, toBaseRat(*to))
 	return result, nil
 }
 
 // CompoundUnit represents a compound unit like mi/gal.
 // Dimensionless values use numUnit for both Num and Den.
 type CompoundUnit struct {
-	Num *Unit // numUnit = dimensionless numerator
-	Den *Unit // numUnit = no denominator
+	Num Unit // numUnit = dimensionless numerator
+	Den Unit // numUnit = no denominator
 }
 
 // SimpleUnit creates a CompoundUnit from a single unit.
-func SimpleUnit(u *Unit) CompoundUnit {
+func SimpleUnit(u Unit) CompoundUnit {
 	return CompoundUnit{Num: u, Den: numUnit}
 }
 
@@ -232,16 +258,11 @@ func (c CompoundUnit) HasOffset() bool {
 
 // Compatible checks whether two compound units are compatible for add/sub.
 func (c CompoundUnit) Compatible(other CompoundUnit) bool {
-	if !unitPtrCatEqual(c.Num, other.Num) {
+	if c.Num.Category != other.Num.Category {
 		return false
 	}
-	if !unitPtrCatEqual(c.Den, other.Den) {
+	if c.Den.Category != other.Den.Category {
 		return false
 	}
 	return true
-}
-
-// unitPtrCatEqual checks if two *Unit pointers have the same category.
-func unitPtrCatEqual(a, b *Unit) bool {
-	return a.Category == b.Category
 }

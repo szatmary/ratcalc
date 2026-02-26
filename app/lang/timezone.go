@@ -24,14 +24,26 @@ var timezoneTable = map[string]int{
 	"NZDT": 13 * 3600,
 }
 
-// LookupTimezone returns a *time.Location for the given timezone abbreviation,
-// or nil if not recognized.
-func LookupTimezone(name string) *time.Location {
-	offset, ok := timezoneTable[name]
-	if !ok {
-		return nil
+// tzUnits maps timezone abbreviation to a Unit with PreOffset as time.Location.
+var tzUnits map[string]Unit
+
+func init() {
+	tzUnits = make(map[string]Unit, len(timezoneTable))
+	for name, offset := range timezoneTable {
+		tzUnits[name] = Unit{
+			Short:     "timestamp",
+			Category:  UnitTimestamp,
+			ToBase:    ratFromFrac(1, 1),
+			PreOffset: *time.FixedZone(name, offset),
+		}
 	}
-	return time.FixedZone(name, offset)
+}
+
+// LookupTZUnit returns a Unit for the given timezone abbreviation.
+// Returns the zero Unit if not recognized (check Category == UnitTimestamp).
+func LookupTZUnit(name string) (Unit, bool) {
+	u, ok := tzUnits[name]
+	return u, ok
 }
 
 // IsTimezone returns true if the given name is a known timezone abbreviation.

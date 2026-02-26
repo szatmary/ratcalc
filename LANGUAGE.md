@@ -496,7 +496,7 @@ now() to unix                  → current unix timestamp
 
 `to hex`, `to bin`, and `to oct` convert an integer value to hexadecimal, binary,
 or octal display format. The value must be an integer — non-integer values produce
-an error.
+an error. Physical units are stripped — only the numeric value is displayed.
 
 ```
 255 to hex        → 0xff
@@ -504,6 +504,7 @@ an error.
 63 to oct         → 0o77
 0xFF to hex       → 0xff   (round-trip)
 0xFF + 1 to hex   → 0x100
+255 B to hex      → 0xff   (units stripped)
 ```
 
 `to` is a **context-sensitive keyword**: it is only treated as the conversion

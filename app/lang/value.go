@@ -7,67 +7,60 @@ import (
 	"time"
 )
 
-// CatVal pairs a rational value (in base units) with its unit.
+// Value pairs a rational value (in base units) with its unit.
 // The Rat holds the magnitude in base-unit terms. Unit is numUnit for dimensionless.
-type CatVal struct {
-	big.Rat
-	Unit *Unit // numUnit = dimensionless
-}
-
-// Value represents a rational number with optional compound units.
-// The effective numeric value is Num.Rat / Den.Rat.
-//
-// Display controls rendering:
-//
-//	nil             — default: integers and simple fractions (denom ≤ 1000) as
-//	                  fractions, otherwise truncated decimal
-//	time.Location   — timestamp timezone (value, not pointer)
-//	int             — forced display base:
-//	                    10 = decimal (never fraction)
-//	                    2  = binary  (0b prefix, integer only)
-//	                    8  = octal   (0o prefix, integer only)
-//	                    16 = hex     (0x prefix, integer only)
 type Value struct {
-	Num     CatVal
-	Den     CatVal
-	Display any // display hint (see Value doc)
+	big.Rat
+	Unit Unit // numUnit = dimensionless
 }
 
-// oneCatVal returns a CatVal with Rat=1 and Unit=numUnit (dimensionless 1).
-func oneCatVal() CatVal {
-	var cv CatVal
-	cv.Rat.SetInt64(1)
-	cv.Unit = numUnit
-	return cv
+// CompoundValue represents a rational number with optional compound units.
+// The effective numeric value is Num.Rat / Den.Rat.
+type CompoundValue struct {
+	Num Value
+	Den Value
 }
 
-// dimless creates a dimensionless Value from a rational.
-func dimless(r *big.Rat) Value {
+// oneVal returns a Value with Rat=1 and Unit=numUnit (dimensionless 1).
+func oneVal() Value {
 	var v Value
-	v.Num.Rat.Set(r)
-	v.Num.Unit = numUnit
-	v.Den = oneCatVal()
+	v.Rat.SetInt64(1)
+	v.Unit = numUnit
 	return v
 }
 
+// dimless creates a dimensionless CompoundValue from a rational.
+func dimless(r *big.Rat) CompoundValue {
+	var v CompoundValue
+	v.Num.Rat.Set(r)
+	v.Num.Unit = numUnit
+	v.Den = oneVal()
+	return v
+}
+
+// simpleVal creates a CompoundValue from a single Value (Den = 1 dimensionless).
+func simpleVal(v Value) CompoundValue {
+	return CompoundValue{Num: v, Den: oneVal()}
+}
+
 // IsTimestamp returns true if the value represents an absolute point in time.
-func (v Value) IsTimestamp() bool {
-	return v.Num.Unit == tsUnit && v.Den.Unit == numUnit
+func (v CompoundValue) IsTimestamp() bool {
+	return v.Num.Unit.Category == UnitTimestamp && v.Den.Unit.Category == UnitNumber
 }
 
 // CompoundUnit reconstructs the CompoundUnit for display.
-func (v Value) CompoundUnit() CompoundUnit {
+func (v CompoundValue) CompoundUnit() CompoundUnit {
 	return CompoundUnit{Num: v.Num.Unit, Den: v.Den.Unit}
 }
 
 // IsEmpty returns true if both units are dimensionless.
-func (v Value) IsEmpty() bool {
+func (v CompoundValue) IsEmpty() bool {
 	return v.Num.Unit.Category == UnitNumber && v.Den.Unit.Category == UnitNumber
 }
 
 // effectiveRat returns Num.Rat / Den.Rat as a new *big.Rat.
-// If Den.Rat is zero (zero-value Value), returns a copy of Num.Rat.
-func (v Value) effectiveRat() *big.Rat {
+// If Den.Rat is zero (zero-value CompoundValue), returns a copy of Num.Rat.
+func (v CompoundValue) effectiveRat() *big.Rat {
 	if v.Den.Rat.Sign() == 0 {
 		return new(big.Rat).Set(&v.Num.Rat)
 	}
@@ -75,33 +68,39 @@ func (v Value) effectiveRat() *big.Rat {
 }
 
 // Sign returns the sign of the effective value.
-func (v Value) Sign() int {
+func (v CompoundValue) Sign() int {
 	return v.effectiveRat().Sign()
 }
 
+// displayBase returns the display base if the numerator unit encodes one (int ToBase).
+func displayBase(v CompoundValue) (int, bool) {
+	b, ok := v.Num.Unit.ToBase.(int)
+	return b, ok
+}
+
 // DisplayRat returns the value converted from base units to display units.
-func (v Value) DisplayRat() *big.Rat {
-	if v.IsTimestamp() {
+func (v CompoundValue) DisplayRat() *big.Rat {
+	if v.Num.Unit.Category == UnitTimestamp {
 		return v.effectiveRat()
 	}
 	r := v.effectiveRat()
 	// Convert numerator from base to display units
-	if v.Num.Unit != numUnit && !v.Num.Unit.HasOffset() {
-		r.Quo(r, &v.Num.Unit.ToBase)
+	if v.Num.Unit.Category != UnitNumber && !v.Num.Unit.HasOffset() {
+		r.Quo(r, toBaseRat(v.Num.Unit))
 	}
 	// Convert denominator from base to display units (inverse)
-	if v.Den.Unit != numUnit && !v.Den.Unit.HasOffset() {
-		r.Mul(r, &v.Den.Unit.ToBase)
+	if v.Den.Unit.Category != UnitNumber && !v.Den.Unit.HasOffset() {
+		r.Mul(r, toBaseRat(v.Den.Unit))
 	}
 	return r
 }
 
 // String formats the value for display.
-func (v Value) String() string {
-	if v.IsTimestamp() {
+func (v CompoundValue) String() string {
+	if v.Num.Unit.Category == UnitTimestamp {
 		sec := v.Num.Rat.Num().Int64() / v.Num.Rat.Denom().Int64()
 		t := time.Unix(sec, 0).UTC()
-		if loc, ok := v.Display.(time.Location); ok {
+		if loc, ok := v.Num.Unit.PreOffset.(time.Location); ok {
 			t = t.In(&loc)
 			_, offset := t.Zone()
 			sign := "+"
@@ -116,17 +115,16 @@ func (v Value) String() string {
 		return t.Format("2006-01-02 15:04:05 +0000")
 	}
 	dr := v.DisplayRat()
-	base, _ := v.Display.(int)
 	cu := v.CompoundUnit()
-	if base != 0 && base != 10 && dr.IsInt() {
-		s := formatIntBase(dr.Num(), base)
-		if us := cu.String(); us != "" {
-			s += " " + us
-		}
-		return s
+
+	// Check for base display (hex/bin/oct)
+	if base, ok := displayBase(v); ok && base != 10 && dr.IsInt() {
+		return formatIntBase(dr.Num(), base)
 	}
+
 	var s string
-	if base == 10 || hasTimeUnit(cu) {
+	_, isBase := displayBase(v)
+	if isBase || hasTimeUnit(cu) || cu.HasOffset() {
 		s = formatDecimal(dr)
 	} else {
 		s = formatRat(dr)
@@ -238,17 +236,20 @@ func (e *EvalError) Error() string {
 	return e.Msg
 }
 
-// unitEqual returns true if two Values have the same compound unit structure.
-func unitEqual(a, b Value) bool {
-	return a.Num.Unit == b.Num.Unit && a.Den.Unit == b.Den.Unit
+// unitEqual returns true if two CompoundValues have the same compound unit structure.
+func unitEqual(a, b CompoundValue) bool {
+	return a.Num.Unit.Category == b.Num.Unit.Category &&
+		a.Num.Unit.Short == b.Num.Unit.Short &&
+		a.Den.Unit.Category == b.Den.Unit.Category &&
+		a.Den.Unit.Short == b.Den.Unit.Short
 }
 
-// Arithmetic operations on Values
+// Arithmetic operations on CompoundValues
 
-func valAdd(a, b Value) (Value, error) {
+func valAdd(a, b CompoundValue) (CompoundValue, error) {
 	// Time guards
 	if a.IsTimestamp() && b.IsTimestamp() {
-		return Value{}, &EvalError{Msg: "cannot add two times"}
+		return CompoundValue{}, &EvalError{Msg: "cannot add two times"}
 	}
 	if a.IsTimestamp() && !b.IsTimestamp() {
 		if isSimpleTimeUnit(b) {
@@ -256,9 +257,9 @@ func valAdd(a, b Value) (Value, error) {
 			secs := durationToSeconds(b)
 			var r big.Rat
 			r.Add(&a.Num.Rat, secs)
-			return Value{Num: CatVal{Rat: r, Unit: tsUnit}, Den: oneCatVal(), Display: a.Display}, nil
+			return simpleVal(Value{Rat: r, Unit: a.Num.Unit}), nil
 		}
-		return Value{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
+		return CompoundValue{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
 	}
 	if !a.IsTimestamp() && b.IsTimestamp() {
 		if isSimpleTimeUnit(a) {
@@ -266,9 +267,9 @@ func valAdd(a, b Value) (Value, error) {
 			secs := durationToSeconds(a)
 			var r big.Rat
 			r.Add(secs, &b.Num.Rat)
-			return Value{Num: CatVal{Rat: r, Unit: tsUnit}, Den: oneCatVal(), Display: b.Display}, nil
+			return simpleVal(Value{Rat: r, Unit: b.Num.Unit}), nil
 		}
-		return Value{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
+		return CompoundValue{}, &EvalError{Msg: "cannot add to time: use a time unit (s, min, hr, d, etc.)"}
 	}
 
 	au, bu := a.CompoundUnit(), b.CompoundUnit()
@@ -278,10 +279,10 @@ func valAdd(a, b Value) (Value, error) {
 		return dimless(r), nil
 	}
 	if au.IsEmpty() || bu.IsEmpty() {
-		return Value{}, &EvalError{Msg: "cannot add values with and without units"}
+		return CompoundValue{}, &EvalError{Msg: "cannot add values with and without units"}
 	}
 	if !au.Compatible(bu) {
-		return Value{}, &EvalError{Msg: fmt.Sprintf("cannot add %s and %s", au.String(), bu.String())}
+		return CompoundValue{}, &EvalError{Msg: fmt.Sprintf("cannot add %s and %s", au.String(), bu.String())}
 	}
 	// Temperature (offset-based): values stored in display units, need conversion
 	if au.HasOffset() || bu.HasOffset() {
@@ -290,20 +291,20 @@ func valAdd(a, b Value) (Value, error) {
 		bConverted := new(big.Rat).Mul(bEff, factor)
 		aEff := a.effectiveRat()
 		r := new(big.Rat).Add(aEff, bConverted)
-		return Value{Num: CatVal{Rat: *r, Unit: a.Num.Unit}, Den: CatVal{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
+		return CompoundValue{Num: Value{Rat: *r, Unit: a.Num.Unit}, Den: Value{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
 	}
 	// Both in base units — add effective rats, keep a's units
 	r := new(big.Rat).Add(a.effectiveRat(), b.effectiveRat())
-	return Value{Num: CatVal{Rat: *r, Unit: a.Num.Unit}, Den: CatVal{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
+	return CompoundValue{Num: Value{Rat: *r, Unit: a.Num.Unit}, Den: Value{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
 }
 
-func valSub(a, b Value) (Value, error) {
+func valSub(a, b CompoundValue) (CompoundValue, error) {
 	// Time guards
 	if a.IsTimestamp() && b.IsTimestamp() {
 		// time - time = duration in seconds
 		var r big.Rat
 		r.Sub(&a.Num.Rat, &b.Num.Rat)
-		return Value{Num: CatVal{Rat: r, Unit: SecondsUnit()}, Den: oneCatVal()}, nil
+		return simpleVal(Value{Rat: r, Unit: *SecondsUnit()}), nil
 	}
 	if a.IsTimestamp() && !b.IsTimestamp() {
 		if isSimpleTimeUnit(b) {
@@ -311,12 +312,12 @@ func valSub(a, b Value) (Value, error) {
 			secs := durationToSeconds(b)
 			var r big.Rat
 			r.Sub(&a.Num.Rat, secs)
-			return Value{Num: CatVal{Rat: r, Unit: tsUnit}, Den: oneCatVal(), Display: a.Display}, nil
+			return simpleVal(Value{Rat: r, Unit: a.Num.Unit}), nil
 		}
-		return Value{}, &EvalError{Msg: "cannot subtract from time: use a time unit (s, min, hr, d, etc.)"}
+		return CompoundValue{}, &EvalError{Msg: "cannot subtract from time: use a time unit (s, min, hr, d, etc.)"}
 	}
 	if b.IsTimestamp() {
-		return Value{}, &EvalError{Msg: "cannot subtract time from non-time value"}
+		return CompoundValue{}, &EvalError{Msg: "cannot subtract time from non-time value"}
 	}
 
 	au, bu := a.CompoundUnit(), b.CompoundUnit()
@@ -325,10 +326,10 @@ func valSub(a, b Value) (Value, error) {
 		return dimless(r), nil
 	}
 	if au.IsEmpty() || bu.IsEmpty() {
-		return Value{}, &EvalError{Msg: "cannot subtract values with and without units"}
+		return CompoundValue{}, &EvalError{Msg: "cannot subtract values with and without units"}
 	}
 	if !au.Compatible(bu) {
-		return Value{}, &EvalError{Msg: fmt.Sprintf("cannot subtract %s and %s", au.String(), bu.String())}
+		return CompoundValue{}, &EvalError{Msg: fmt.Sprintf("cannot subtract %s and %s", au.String(), bu.String())}
 	}
 	// Temperature (offset-based)
 	if au.HasOffset() || bu.HasOffset() {
@@ -337,15 +338,15 @@ func valSub(a, b Value) (Value, error) {
 		bConverted := new(big.Rat).Mul(bEff, factor)
 		aEff := a.effectiveRat()
 		r := new(big.Rat).Sub(aEff, bConverted)
-		return Value{Num: CatVal{Rat: *r, Unit: a.Num.Unit}, Den: CatVal{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
+		return CompoundValue{Num: Value{Rat: *r, Unit: a.Num.Unit}, Den: Value{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
 	}
 	r := new(big.Rat).Sub(a.effectiveRat(), b.effectiveRat())
-	return Value{Num: CatVal{Rat: *r, Unit: a.Num.Unit}, Den: CatVal{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
+	return CompoundValue{Num: Value{Rat: *r, Unit: a.Num.Unit}, Den: Value{Rat: *new(big.Rat).SetInt64(1), Unit: a.Den.Unit}}, nil
 }
 
-func valMul(a, b Value) (Value, error) {
+func valMul(a, b CompoundValue) (CompoundValue, error) {
 	if a.IsTimestamp() || b.IsTimestamp() {
-		return Value{}, &EvalError{Msg: "cannot multiply time values"}
+		return CompoundValue{}, &EvalError{Msg: "cannot multiply time values"}
 	}
 	// Multiply: result.Num = a.Num * b.Num, result.Den = a.Den * b.Den
 	var numRat, denRat big.Rat
@@ -354,17 +355,17 @@ func valMul(a, b Value) (Value, error) {
 
 	numUnit, denUnit, err := cancelUnits(a.Num.Unit, b.Num.Unit, a.Den.Unit, b.Den.Unit)
 	if err != nil {
-		return Value{}, err
+		return CompoundValue{}, err
 	}
-	return Value{Num: CatVal{Rat: numRat, Unit: numUnit}, Den: CatVal{Rat: denRat, Unit: denUnit}}, nil
+	return CompoundValue{Num: Value{Rat: numRat, Unit: numUnit}, Den: Value{Rat: denRat, Unit: denUnit}}, nil
 }
 
-func valDiv(a, b Value) (Value, error) {
+func valDiv(a, b CompoundValue) (CompoundValue, error) {
 	if a.IsTimestamp() || b.IsTimestamp() {
-		return Value{}, &EvalError{Msg: "cannot divide time values"}
+		return CompoundValue{}, &EvalError{Msg: "cannot divide time values"}
 	}
 	if b.effectiveRat().Sign() == 0 {
-		return Value{}, &EvalError{Msg: "division by zero"}
+		return CompoundValue{}, &EvalError{Msg: "division by zero"}
 	}
 	// Division: a/b = (a.Num*b.Den) / (a.Den*b.Num)
 	var numRat, denRat big.Rat
@@ -373,9 +374,9 @@ func valDiv(a, b Value) (Value, error) {
 
 	numUnit, denUnit, err := cancelUnits(a.Num.Unit, b.Den.Unit, a.Den.Unit, b.Num.Unit)
 	if err != nil {
-		return Value{}, err
+		return CompoundValue{}, err
 	}
-	return Value{Num: CatVal{Rat: numRat, Unit: numUnit}, Den: CatVal{Rat: denRat, Unit: denUnit}}, nil
+	return CompoundValue{Num: Value{Rat: numRat, Unit: numUnit}, Den: Value{Rat: denRat, Unit: denUnit}}, nil
 }
 
 // cancelUnits implements category cancellation for mul/div.
@@ -383,23 +384,23 @@ func valDiv(a, b Value) (Value, error) {
 // denA, denB are the two units going into the denominator.
 // If a category appears on both sides, it cancels.
 // After cancellation, each side must have at most 1 category.
-func cancelUnits(numA, numB, denA, denB *Unit) (resNum, resDen *Unit, err error) {
+func cancelUnits(numA, numB, denA, denB Unit) (resNum, resDen Unit, err error) {
 	// Collect non-dimensionless units per side
 	type catUnit struct {
 		cat  UnitCategory
-		unit *Unit
+		unit Unit
 	}
 	var nums, dens []catUnit
-	if numA != numUnit {
+	if numA.Category != UnitNumber {
 		nums = append(nums, catUnit{numA.Category, numA})
 	}
-	if numB != numUnit {
+	if numB.Category != UnitNumber {
 		nums = append(nums, catUnit{numB.Category, numB})
 	}
-	if denA != numUnit {
+	if denA.Category != UnitNumber {
 		dens = append(dens, catUnit{denA.Category, denA})
 	}
-	if denB != numUnit {
+	if denB.Category != UnitNumber {
 		dens = append(dens, catUnit{denB.Category, denB})
 	}
 
@@ -434,10 +435,10 @@ func cancelUnits(numA, numB, denA, denB *Unit) (resNum, resDen *Unit, err error)
 	return resNum, resDen, nil
 }
 
-func valNeg(a Value) Value {
+func valNeg(a CompoundValue) CompoundValue {
 	var r big.Rat
 	r.Neg(&a.Num.Rat)
-	return Value{Num: CatVal{Rat: r, Unit: a.Num.Unit}, Den: a.Den, Display: a.Display}
+	return CompoundValue{Num: Value{Rat: r, Unit: a.Num.Unit}, Den: a.Den}
 }
 
 // hasTimeUnit returns true if any unit in the value is a time-category unit.
@@ -447,25 +448,25 @@ func hasTimeUnit(u CompoundUnit) bool {
 
 // isSimpleTimeUnit returns true if the value has a single numerator unit
 // in the UnitTime category with no denominator unit. This identifies durations.
-func isSimpleTimeUnit(v Value) bool {
-	return v.Num.Unit.Category == UnitTime && v.Den.Unit == numUnit
+func isSimpleTimeUnit(v CompoundValue) bool {
+	return v.Num.Unit.Category == UnitTime && v.Den.Unit.Category == UnitNumber
 }
 
 // durationToSeconds returns the duration in seconds.
 // The Num.Rat is already in base units (seconds), so just return effective rat.
-func durationToSeconds(v Value) *big.Rat {
+func durationToSeconds(v CompoundValue) *big.Rat {
 	return v.effectiveRat()
 }
 
 // compoundConversionFactor computes the conversion factor from compound unit `from` to `to`.
 func compoundConversionFactor(from, to CompoundUnit) *big.Rat {
 	factor := new(big.Rat).SetInt64(1)
-	if from.Num != numUnit && to.Num != numUnit {
-		f := new(big.Rat).Quo(&from.Num.ToBase, &to.Num.ToBase)
+	if from.Num.Category != UnitNumber && to.Num.Category != UnitNumber {
+		f := new(big.Rat).Quo(toBaseRat(from.Num), toBaseRat(to.Num))
 		factor.Mul(factor, f)
 	}
-	if from.Den != numUnit && to.Den != numUnit {
-		f := new(big.Rat).Quo(&to.Den.ToBase, &from.Den.ToBase)
+	if from.Den.Category != UnitNumber && to.Den.Category != UnitNumber {
+		f := new(big.Rat).Quo(toBaseRat(to.Den), toBaseRat(from.Den))
 		factor.Mul(factor, f)
 	}
 	return factor
