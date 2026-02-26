@@ -263,66 +263,35 @@ function base64urlDecode(str) {
   for (var i = 0; i < binary.length; i++) data[i] = binary.charCodeAt(i);
   return data;
 }
-async function compress(text) {
-  var cs = new CompressionStream('deflate-raw');
-  var writer = cs.writable.getWriter();
-  writer.write(new TextEncoder().encode(text));
-  writer.close();
-  var chunks = [], reader = cs.readable.getReader();
-  while (true) {
-    var r = await reader.read();
-    if (r.done) break;
-    chunks.push(r.value);
-  }
-  var len = chunks.reduce(function(a, c) { return a + c.length; }, 0);
-  var out = new Uint8Array(len), off = 0;
-  chunks.forEach(function(c) { out.set(c, off); off += c.length; });
-  return out;
+function compress(text) {
+  return zstdCompress(text);
 }
-async function decompress(data) {
-  var ds = new DecompressionStream('deflate-raw');
-  var writer = ds.writable.getWriter();
-  writer.write(data);
-  writer.close();
-  var chunks = [], reader = ds.readable.getReader();
-  while (true) {
-    var r = await reader.read();
-    if (r.done) break;
-    chunks.push(r.value);
-  }
-  var len = chunks.reduce(function(a, c) { return a + c.length; }, 0);
-  var out = new Uint8Array(len), off = 0;
-  chunks.forEach(function(c) { out.set(c, off); off += c.length; });
-  return new TextDecoder().decode(out);
+function decompress(data) {
+  return zstdDecompress(data);
 }
-async function shareLink() {
+function shareLink() {
   if (typeof getEditorText !== 'function') return;
   var text = getEditorText();
   if (!text) return;
-  var compressed = await compress(text);
+  var compressed = compress(text);
   var encoded = base64urlEncode(compressed);
   var url = window.location.origin + window.location.pathname + '?t=' + encoded;
-  await navigator.clipboard.writeText(url);
+  navigator.clipboard.writeText(url);
   alert('Link copied to clipboard');
 }
 </script>
 <script src="wasm_exec.js"></script>
 <script>
-// Decode URL parameter before WASM loads, then start WASM
+// Decode URL parameter after WASM loads (zstd runs in WASM)
 (async function() {
-  var initialText = null;
-  var params = new URLSearchParams(window.location.search);
-  var encoded = params.get('t');
-  if (encoded) {
-    try {
-      initialText = await decompress(base64urlDecode(encoded));
-    } catch(e) { console.error('Failed to decode shared text:', e); }
-  }
+  var encodedParam = new URLSearchParams(window.location.search).get('t');
 
-  // When WASM is ready, set initial text and run first eval
   window._onWasmReady = function() {
-    if (initialText) {
-      editor.value = initialText;
+    if (encodedParam) {
+      try {
+        var text = decompress(base64urlDecode(encodedParam));
+        if (text) editor.value = text;
+      } catch(e) { console.error('Failed to decode shared text:', e); }
     }
     runEval(false);
     editor.focus();
