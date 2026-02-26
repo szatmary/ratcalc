@@ -85,17 +85,20 @@ nav button.active {
 }
 #results {
   width: 280px;
-  min-width: 280px;
+  min-width: 80px;
   background: #181825;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 14px;
   line-height: 21px;
   padding: 8px 12px;
-  overflow: hidden;
+  overflow: auto;
   user-select: text;
   border-left: 1px solid #313244;
+  resize: horizontal;
+  direction: rtl;
 }
 #results div {
+  direction: ltr;
   height: 21px;
   white-space: nowrap;
   overflow: hidden;
@@ -214,6 +217,7 @@ function measureMaxChars() {
   if (maxChars > 0) setMaxDisplayLen(maxChars);
 }
 window.addEventListener('resize', measureMaxChars);
+new ResizeObserver(function() { measureMaxChars(); runEval(false); }).observe(resultsDiv);
 
 function runEval(nowTicked) {
   if (typeof evaluate !== 'function') return;
