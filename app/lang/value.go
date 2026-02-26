@@ -58,7 +58,7 @@ func (v Value) String() string {
 		return s
 	}
 	var s string
-	if v.Base == 10 {
+	if v.Base == 10 || hasTimeUnit(v.Unit) {
 		s = formatDecimal(v.Rat)
 	} else {
 		s = formatRat(v.Rat)
@@ -326,6 +326,24 @@ func divideUnits(a, b *CompoundUnit) *CompoundUnit {
 		return nil
 	}
 	return result
+}
+
+// hasTimeUnit returns true if any unit in the compound unit is a time-category unit.
+func hasTimeUnit(u *CompoundUnit) bool {
+	if u == nil {
+		return false
+	}
+	for _, unit := range u.Num {
+		if unit.Category == UnitTime {
+			return true
+		}
+	}
+	for _, unit := range u.Den {
+		if unit.Category == UnitTime {
+			return true
+		}
+	}
+	return false
 }
 
 // isSimpleTimeUnit returns true if the compound unit is a single numerator unit

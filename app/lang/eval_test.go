@@ -238,7 +238,7 @@ func TestDaysWeeksYears(t *testing.T) {
 	}{
 		{"1 day to hr", "24 hr"},
 		{"1 week to d", "7 d"},
-		{"1 yr to d", "1461/4 d"},
+		{"1 yr to d", "365.25 d"},
 		{"24 hr to d", "1 d"},
 		{"7 d to wk", "1 wk"},
 		{"365.25 d to yr", "1 yr"},
@@ -320,8 +320,8 @@ func TestToUnix(t *testing.T) {
 		t.Fatalf("fractional to unix error: %v", err)
 	}
 	got = val.String()
-	if got != "3413491201/2" {
-		t.Errorf("(@2024-02-01 + 1/2) to unix = %q, want 3413491201/2", got)
+	if got != "1706745600.5" {
+		t.Errorf("(@2024-02-01 + 1/2) to unix = %q, want 1706745600.5", got)
 	}
 
 	// Error: to unix on non-time value
