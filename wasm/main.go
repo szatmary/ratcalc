@@ -90,6 +90,37 @@ func main() {
 		return string(dst)
 	}))
 
+	// Register tokenize function for syntax highlighting
+	js.Global().Set("tokenize", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 1 {
+			return nil
+		}
+		text := args[0].String()
+		lines := strings.Split(text, "\n")
+		result := js.Global().Get("Array").New(len(lines))
+		for i, line := range lines {
+			tokens := lang.Lex(line)
+			lineArr := js.Global().Get("Array").New(len(tokens))
+			for j, t := range tokens {
+				obj := js.Global().Get("Object").New()
+				obj.Set("type", int(t.Type))
+				obj.Set("pos", t.Pos)
+				obj.Set("lit", t.Literal)
+				lineArr.SetIndex(j, obj)
+			}
+			result.SetIndex(i, lineArr)
+		}
+		return result
+	}))
+
+	// Register isUnit function for syntax highlighting
+	js.Global().Set("isUnit", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) < 1 {
+			return false
+		}
+		return lang.LookupUnit(args[0].String()) != nil
+	}))
+
 	// Signal that WASM is ready
 	js.Global().Set("_wasmReady", true)
 	onReady := js.Global().Get("_onWasmReady")

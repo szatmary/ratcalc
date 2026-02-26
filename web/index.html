@@ -67,10 +67,37 @@ nav button.active {
   height: 21px;
   white-space: nowrap;
 }
-#editor {
+#editor-wrap {
   flex: 1;
-  background: #1e1e2e;
+  position: relative;
+  overflow: hidden;
+}
+#highlight {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 21px;
+  padding: 8px 12px;
+  white-space: pre;
+  tab-size: 4;
+  overflow: hidden;
+  pointer-events: none;
   color: #cdd6f4;
+}
+#highlight div {
+  height: 21px;
+}
+#highlight .hl-line {
+  background: rgba(255,255,255,0.04);
+}
+#editor {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: transparent;
+  color: transparent;
+  caret-color: #cdd6f4;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 14px;
   line-height: 21px;
@@ -83,6 +110,17 @@ nav button.active {
   white-space: pre;
   tab-size: 4;
 }
+.tk-num   { color: #fab387; }
+.tk-op    { color: #89dceb; }
+.tk-paren { color: #f5c2e7; }
+.tk-cur   { color: #f9e2af; }
+.tk-unit  { color: #89b4fa; }
+.tk-fn    { color: #cba6f7; }
+.tk-ref   { color: #94e2d5; }
+.tk-at    { color: #f5c2e7; }
+.tk-time  { color: #f5c2e7; }
+.tk-cmt   { color: #6c7086; }
+.tk-eq    { color: #f38ba8; }
 #results-wrapper {
   display: flex;
   width: 280px;
@@ -231,7 +269,10 @@ nav button.active {
 </nav>
 <div id="calc-container">
   <div id="line-numbers"><div>1</div></div>
-  <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  <div id="editor-wrap">
+    <div id="highlight" aria-hidden="true"></div>
+    <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  </div>
   <div id="results-wrapper"><div id="results-drag"></div><div id="results"></div></div>
 </div>
 <div id="tab-lang"><div class="markdown" id="lang-content"></div></div>
@@ -268,7 +309,126 @@ var lineNumbers = document.getElementById('line-numbers');
 var resultsDiv = document.getElementById('results');
 var resultsWrapper = document.getElementById('results-wrapper');
 var resultsDrag = document.getElementById('results-drag');
+var highlightDiv = document.getElementById('highlight');
 var nowInterval = null;
+
+// --- Syntax highlighting ---
+var TK = {
+  NUMBER:0, WORD:1, PLUS:2, MINUS:3, STAR:4, SLASH:5,
+  LPAREN:6, RPAREN:7, EQUALS:8, DOT:9, HASH:10, AT:11,
+  COMMA:12, PERCENT:13, BANG:14, STARSTAR:15, AMP:16,
+  PIPE:17, CARET:18, TILDE:19, LSHIFT:20, RSHIFT:21,
+  CURRENCY:22, TIME:23, EOF:24
+};
+var FUNCTIONS = new Set(['sin','cos','tan','asin','acos','atan','sqrt','abs',
+  'log','ln','log2','ceil','floor','round','pow','mod','atan2','min','max',
+  'now','date','time','unix','num','fv','pv','year','month','day','hour','minute','second']);
+
+var unitCache = {};
+function cachedIsUnit(name) {
+  if (name in unitCache) return unitCache[name];
+  var result = (typeof isUnit === 'function') && isUnit(name);
+  unitCache[name] = result;
+  return result;
+}
+
+function tokenClass(type, literal, nextType) {
+  switch(type) {
+    case TK.NUMBER: return 'tk-num';
+    case TK.CURRENCY: return 'tk-cur';
+    case TK.LPAREN: case TK.RPAREN: return 'tk-paren';
+    case TK.EQUALS: return 'tk-eq';
+    case TK.AT: return 'tk-at';
+    case TK.TIME: return 'tk-time';
+    case TK.HASH: return 'tk-ref';
+    case TK.PLUS: case TK.MINUS: case TK.STAR: case TK.SLASH:
+    case TK.STARSTAR: case TK.AMP: case TK.PIPE: case TK.CARET:
+    case TK.TILDE: case TK.LSHIFT: case TK.RSHIFT:
+    case TK.PERCENT: case TK.BANG: case TK.COMMA: case TK.DOT:
+      return 'tk-op';
+    case TK.WORD:
+      if (FUNCTIONS.has(literal) && nextType === TK.LPAREN) return 'tk-fn';
+      if (cachedIsUnit(literal)) return 'tk-unit';
+      return '';
+    default: return '';
+  }
+}
+
+function byteToCharOffsets(line) {
+  var enc = new TextEncoder();
+  var map = [];
+  var bytePos = 0;
+  for (var i = 0; i < line.length; i++) {
+    var charBytes = enc.encode(line[i]).length;
+    for (var b = 0; b < charBytes; b++) {
+      map[bytePos + b] = i;
+    }
+    bytePos += charBytes;
+  }
+  map[bytePos] = line.length;
+  return map;
+}
+
+function buildHighlight(text, currentLine) {
+  if (typeof tokenize !== 'function') return escapeHtml(text);
+  var lines = text.split('\n');
+  var tokenLines = tokenize(text);
+  var html = '';
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var cls = (i === currentLine) ? ' class="hl-line"' : '';
+    var trimmed = line.trimStart();
+    if (trimmed.charAt(0) === ';') {
+      html += '<div' + cls + '><span class="tk-cmt">' + escapeHtml(line) + '</span></div>';
+      continue;
+    }
+    var tokens = tokenLines[i];
+    var b2c = byteToCharOffsets(line);
+    var spans = '';
+    var charPos = 0;
+    for (var j = 0; j < tokens.length; j++) {
+      var t = tokens[j];
+      if (t.type === TK.EOF) break;
+      var tCharStart = b2c[t.pos] !== undefined ? b2c[t.pos] : t.pos;
+      if (tCharStart > charPos) {
+        spans += escapeHtml(line.substring(charPos, tCharStart));
+      }
+      var nextType = (j+1 < tokens.length) ? tokens[j+1].type : TK.EOF;
+      if (t.type === TK.HASH && j+1 < tokens.length && tokens[j+1].type === TK.NUMBER) {
+        var numT = tokens[j+1];
+        var numCharStart = b2c[numT.pos] !== undefined ? b2c[numT.pos] : numT.pos;
+        var numCharEnd = numCharStart + numT.lit.length;
+        spans += '<span class="tk-ref">' + escapeHtml(line.substring(tCharStart, numCharEnd)) + '</span>';
+        charPos = numCharEnd;
+        j++;
+        continue;
+      }
+      var c = tokenClass(t.type, t.lit, nextType);
+      var tCharEnd = tCharStart + t.lit.length;
+      if (c) {
+        spans += '<span class="' + c + '">' + escapeHtml(t.lit) + '</span>';
+      } else {
+        spans += escapeHtml(t.lit);
+      }
+      charPos = tCharEnd;
+    }
+    if (charPos < line.length) {
+      spans += escapeHtml(line.substring(charPos));
+    }
+    html += '<div' + cls + '>' + (spans || ' ') + '</div>';
+  }
+  return html;
+}
+
+function getCurrentLine() {
+  var pos = editor.selectionStart;
+  var text = editor.value.substring(0, pos);
+  return text.split('\n').length - 1;
+}
+
+function updateHighlight() {
+  highlightDiv.innerHTML = buildHighlight(editor.value, getCurrentLine());
+}
 
 function measureMaxChars() {
   if (typeof setMaxDisplayLen !== 'function') return;
@@ -318,6 +478,7 @@ function clearEditor() {
   editor.value = '';
   try { localStorage.removeItem('ratcalc_text'); } catch(e) {}
   runEval(false);
+  updateHighlight();
   editor.focus();
 }
 
@@ -328,8 +489,13 @@ function escapeHtml(s) {
 
 editor.addEventListener('input', function() {
   runEval(false);
+  updateHighlight();
   try { localStorage.setItem('ratcalc_text', editor.value); } catch(e) {}
 });
+editor.addEventListener('click', updateHighlight);
+editor.addEventListener('keyup', updateHighlight);
+editor.addEventListener('mouseup', updateHighlight);
+editor.addEventListener('select', updateHighlight);
 
 // --- Save as .txt with Cmd/Ctrl+S ---
 document.addEventListener('keydown', function(e) {
@@ -348,6 +514,7 @@ document.addEventListener('keydown', function(e) {
 editor.addEventListener('scroll', function() {
   lineNumbers.scrollTop = editor.scrollTop;
   resultsDiv.scrollTop = editor.scrollTop;
+  highlightDiv.scrollTop = editor.scrollTop;
 });
 
 // --- Drag to resize results gutter ---
@@ -459,7 +626,7 @@ function shareLink() {
             '; --- Currency ---',
             '$100 * 1.08',
             '€250 + €49.99',
-            'hourly = $85',
+            'hourly = $85/hr',
             'hourly * 40 hr',
             '',
             '; --- Percentages ---',
@@ -507,6 +674,7 @@ function shareLink() {
     }
     measureMaxChars();
     runEval(false);
+    updateHighlight();
     editor.focus();
   };
 
