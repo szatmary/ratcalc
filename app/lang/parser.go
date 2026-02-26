@@ -179,11 +179,18 @@ func (p *Parser) parseUnary() (Node, error) {
 	return p.parsePostfix()
 }
 
-// parsePostfix: primary unit?
+// parsePostfix: primary ("%"? unit?)
 func (p *Parser) parsePostfix() (Node, error) {
 	node, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
+	}
+
+	// Check for % postfix
+	if p.peek().Type == TOKEN_PERCENT {
+		p.advance() // consume '%'
+		node = &PercentExpr{Expr: node}
+		return node, nil
 	}
 
 	// Check if next token is a WORD that matches a known unit

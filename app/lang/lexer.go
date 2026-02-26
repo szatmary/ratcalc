@@ -44,6 +44,9 @@ func Lex(input string) []Token {
 		case ',':
 			tokens = append(tokens, Token{Type: TOKEN_COMMA, Literal: ",", Pos: i})
 			i++
+		case '%':
+			tokens = append(tokens, Token{Type: TOKEN_PERCENT, Literal: "%", Pos: i})
+			i++
 		case '@':
 			if end, ok := tryLexAt(input, i); ok {
 				tokens = append(tokens, Token{Type: TOKEN_AT, Literal: input[i:end], Pos: i})

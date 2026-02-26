@@ -68,17 +68,23 @@ type TZExpr struct {
 	IsInput bool
 }
 
-func (*NumberLit) nodeTag()  {}
-func (*RatioLit) nodeTag()   {}
-func (*VarRef) nodeTag()     {}
-func (*BinaryExpr) nodeTag() {}
-func (*UnaryExpr) nodeTag()  {}
-func (*UnitExpr) nodeTag()   {}
-func (*Assignment) nodeTag() {}
-func (*FuncCall) nodeTag()   {}
-func (*TimeLit) nodeTag()    {}
-func (*TZExpr) nodeTag()     {}
-func (*AMPMExpr) nodeTag()   {}
+// PercentExpr wraps an expression with a % suffix, dividing by 100.
+type PercentExpr struct {
+	Expr Node
+}
+
+func (*NumberLit) nodeTag()   {}
+func (*RatioLit) nodeTag()    {}
+func (*VarRef) nodeTag()      {}
+func (*BinaryExpr) nodeTag()  {}
+func (*UnaryExpr) nodeTag()   {}
+func (*UnitExpr) nodeTag()    {}
+func (*Assignment) nodeTag()  {}
+func (*FuncCall) nodeTag()    {}
+func (*TimeLit) nodeTag()     {}
+func (*TZExpr) nodeTag()      {}
+func (*AMPMExpr) nodeTag()    {}
+func (*PercentExpr) nodeTag() {}
 
 // AMPMExpr wraps a time-producing expression with an AM/PM modifier.
 type AMPMExpr struct {

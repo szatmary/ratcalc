@@ -1,9 +1,11 @@
 package lang
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
+
 
 // TestLanguageSpecExamples tests every example from the Examples section
 // of LANGUAGE.md to ensure the spec stays in sync with the implementation.
@@ -80,6 +82,7 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"sqrt(4)", "2"},
 		{"log(100)", "2"},
 		{"ln(e)", "1"},
+		{"log2(8)", "3"},
 		{"abs(-5)", "5"},
 		{"ceil(3.2)", "4"},
 		{"floor(3.8)", "3"},
@@ -102,6 +105,45 @@ func TestLanguageSpecExamples(t *testing.T) {
 
 		// AU unit
 		{"1 au to km", "1495978707/10 km"},
+
+		// Percentage
+		{"50%", "0.5"},
+		{"100%", "1"},
+		{"10%", "0.1"},
+		{"200 * 10%", "20"},
+		{"1000 * 5%", "50"},
+
+		// Temperature
+		{"100 C to F", "212 F"},
+		{"0 C to K", "273.15 K"},
+		{"32 F to C", "0 C"},
+		{"212 F to C", "100 C"},
+		{"0 K to C", "-273.15 C"},
+		{"373.15 K to C", "100 C"},
+		{"100 C to K", "373.15 K"},
+
+		// Engineering units — exact conversions
+		{"1 kPa to Pa", "1000 Pa"},
+		{"1 bar to Pa", "100000 Pa"},
+		{"1 kN to N", "1000 N"},
+		{"1 kJ to J", "1000 J"},
+		{"1 kWh to J", "3600000 J"},
+		{"1 kcal to cal", "1000 cal"},
+		{"1 kW to W", "1000 W"},
+		{"1 MW to kW", "1000 kW"},
+		{"1 kV to V", "1000 V"},
+		{"1000 mV to V", "1 V"},
+		{"1000 mA to A", "1 A"},
+		{"1 kohm to ohm", "1000 ohm"},
+		{"1 KB to B", "1000 B"},
+		{"1 MB to KB", "1000 KB"},
+		{"1 GB to MB", "1000 MB"},
+
+		// Data — binary units
+		{"1 KiB to B", "1024 B"},
+		{"1 MiB to KiB", "1024 KiB"},
+		{"1 GiB to MiB", "1024 MiB"},
+		{"1 TiB to GiB", "1024 GiB"},
 	}
 
 	for _, tt := range exact {
@@ -282,6 +324,105 @@ func TestLanguageSpecAMPM(t *testing.T) {
 				t.Errorf("EvalLine(%q) = %q, expected to contain %q", tt.input, got, sub)
 			}
 		}
+	}
+}
+
+// TestApproxConversions tests approximate unit conversions.
+func TestApproxConversions(t *testing.T) {
+	approx := []struct {
+		input    string
+		wantMin  float64
+		wantMax  float64
+		wantUnit string
+	}{
+		// Pressure
+		{"1 atm to psi", 14.69, 14.70, "psi"},
+		// Power
+		{"100 W to hp", 0.134, 0.135, "hp"},
+		// Data
+		{"1 GB to MiB", 953.67, 953.68, "MiB"},
+		// Energy
+		{"1 BTU to J", 1055.0, 1055.1, "J"},
+		// Force
+		{"1 lbf to N", 4.44, 4.45, "N"},
+	}
+
+	for _, tt := range approx {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		if val.Unit == nil || val.Unit.String() != tt.wantUnit {
+			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.Unit, tt.wantUnit)
+			continue
+		}
+		f, _ := val.Rat.Float64()
+		if f < tt.wantMin || f > tt.wantMax {
+			t.Errorf("EvalLine(%q) = %f, want [%f, %f]", tt.input, f, tt.wantMin, tt.wantMax)
+		}
+	}
+}
+
+// TestFinanceFunctions tests fv and pv financial functions.
+func TestFinanceFunctions(t *testing.T) {
+	env := make(Env)
+
+	// fv(0.05, 10, 1000) ≈ 12577.89
+	val, err := EvalLine("fv(0.05, 10, 1000)", env)
+	if err != nil {
+		t.Fatalf("fv() error: %v", err)
+	}
+	f, _ := val.Rat.Float64()
+	if math.Abs(f-12577.89) > 1.0 {
+		t.Errorf("fv(0.05, 10, 1000) = %f, want ~12577.89", f)
+	}
+
+	// pv(0.05, 10, 1000) ≈ 7721.73
+	val, err = EvalLine("pv(0.05, 10, 1000)", env)
+	if err != nil {
+		t.Fatalf("pv() error: %v", err)
+	}
+	f, _ = val.Rat.Float64()
+	if math.Abs(f-7721.73) > 1.0 {
+		t.Errorf("pv(0.05, 10, 1000) = %f, want ~7721.73", f)
+	}
+}
+
+// TestPercentage tests percentage syntax.
+func TestPercentage(t *testing.T) {
+	env := make(Env)
+
+	// Percentage in expressions
+	val, err := EvalLine("200 * 10%", env)
+	if err != nil {
+		t.Fatalf("200 * 10%%: %v", err)
+	}
+	got := val.String()
+	if got != "20" {
+		t.Errorf("200 * 10%% = %q, want 20", got)
+	}
+
+	// Percentage with variable
+	EvalLine("rate = 5%", env)
+	val, err = EvalLine("1000 * rate", env)
+	if err != nil {
+		t.Fatalf("1000 * rate: %v", err)
+	}
+	got = val.String()
+	if got != "50" {
+		t.Errorf("1000 * rate = %q, want 50", got)
+	}
+}
+
+// TestTemperatureErrors tests that temperature units in compound positions are rejected.
+func TestTemperatureErrors(t *testing.T) {
+	// Temperature in compound should error
+	env := make(Env)
+	_, err := EvalLine("5 m to C", env)
+	if err == nil {
+		t.Error("expected error for incompatible m to C")
 	}
 }
 

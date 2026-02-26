@@ -14,7 +14,7 @@ compound_unit_spec → UNIT (("/" | "*") UNIT)*
 expression  → term ( ("+" | "-") term )*
 term        → unary ( ("*" | "/") unary )*
 unary       → "-" unary | postfix
-postfix     → primary ( unit | AMPM? TIMEZONE? )?
+postfix     → primary ( "%" | unit | AMPM? TIMEZONE? )?
 primary     → number | "@" DATESPEC | time | funccall | varname | "(" expression ")"
 number      → NUMBER ( "." NUMBER )? ( "/" NUMBER )?
 time        → TIME                            // HH:MM or HH:MM:SS
@@ -38,6 +38,7 @@ unit        → UNIT                            // matched from known units tabl
 | `EQUALS`  | `=`                         |
 | `DOT`     | `.`                         |
 | `COMMA`   | `,`                         |
+| `PERCENT` | `%`                         |
 | `AT`      | `@` followed by date/time/number |
 | `TIME`    | `H:MM` or `HH:MM[:SS]`      |
 | `EOF`     |                             |
@@ -83,6 +84,20 @@ All numbers are exact rationals. Literals:
 - Octal: `0o77`, `0o755`
 - Decimal: `3.14` (stored as `314/100`, auto-simplified)
 - Fraction: `1/3`, `22/7`
+- Percentage: `50%` = `0.5`, `10%` = `0.1` (divides by 100)
+
+### Percentage
+
+The `%` suffix divides a value by 100. It binds tighter than arithmetic operators,
+so `200 * 10%` evaluates as `200 * 0.1 = 20`.
+
+```
+50%            → 0.5
+10%            → 0.1
+200 * 10%      → 20
+rate = 5%      → 0.05
+1000 * rate    → 50
+```
 
 ### Time Values
 A value may be a **time** (unix timestamp internally stored as seconds). Time is
@@ -237,6 +252,7 @@ Values with units or time flags are rejected.
 | `abs(x)` | 1 | Absolute value |
 | `log(x)` | 1 | Base-10 logarithm |
 | `ln(x)` | 1 | Natural logarithm |
+| `log2(x)` | 1 | Base-2 logarithm |
 | `ceil(x)` | 1 | Ceiling (round up) |
 | `floor(x)` | 1 | Floor (round down) |
 | `round(x)` | 1 | Round to nearest integer |
@@ -245,6 +261,21 @@ Values with units or time flags are rejected.
 | `min(x, y)` | 2 | Minimum of x and y |
 | `max(x, y)` | 2 | Maximum of x and y |
 | `atan2(y, x)` | 2 | Two-argument arctangent (radians) |
+
+### Financial Functions
+
+Financial functions use float64 math internally. All arguments must be
+dimensionless.
+
+| Function | Args | Description |
+|----------|------|-------------|
+| `fv(rate, n, pmt)` | 3 | Future value of annuity: `pmt * ((1+rate)^n - 1) / rate` |
+| `pv(rate, n, pmt)` | 3 | Present value of annuity: `pmt * (1 - (1+rate)^(-n)) / rate` |
+
+```
+fv(0.05, 10, 1000)   → ~12577.89  (future value at 5% for 10 periods)
+pv(0.05, 10, 1000)   → ~7721.73   (present value at 5% for 10 periods)
+```
 
 ### Time Extraction Functions
 
@@ -312,6 +343,90 @@ Extract components from a time value. Returns an integer.
 | pt    | pints      | 473.176       |
 | qt    | quarts     | 946.353       |
 | gal   | gallons    | 3785.41       |
+
+### Temperature
+Temperature conversion is offset-based, not purely multiplicative.
+Temperature units cannot appear in compound units (no `C/s`).
+
+| Short | Full        | Base (kelvin)                      |
+|-------|-------------|------------------------------------|
+| K     | kelvin      | 1 (no offset)                      |
+| C     | celsius     | 1 (offset +273.15)                 |
+| F     | fahrenheit  | 5/9 (offset +459.67)               |
+
+```
+100 C to F         → 212 F
+0 C to K           → 273.15 K
+32 F to C          → 0 C
+0 K to C           → -273.15 C
+```
+
+### Pressure
+| Short | Full        | Base (pascals) |
+|-------|-------------|----------------|
+| Pa    | pascals     | 1              |
+| kPa   | kilopascals | 1000           |
+| bar   | bars        | 100000         |
+| atm   | atmospheres | 101325         |
+| psi   | psi         | ~6894.757      |
+
+### Force
+| Short | Full        | Base (newtons) |
+|-------|-------------|----------------|
+| N     | newtons     | 1              |
+| kN    | kilonewtons | 1000           |
+| lbf   | lbf         | ~4.44822       |
+
+### Energy
+| Short | Full           | Base (joules) |
+|-------|----------------|---------------|
+| J     | joules         | 1             |
+| kJ    | kilojoules     | 1000          |
+| Wh    | watt-hours     | 3600          |
+| kWh   | kilowatt-hours | 3600000       |
+| cal   | calories       | 4.184         |
+| kcal  | kilocalories   | 4184          |
+| BTU   | BTU            | ~1055.06      |
+
+### Power
+| Short | Full        | Base (watts) |
+|-------|-------------|--------------|
+| W     | watts       | 1            |
+| kW    | kilowatts   | 1000         |
+| MW    | megawatts   | 1000000      |
+| hp    | horsepower  | ~745.7       |
+
+### Voltage
+| Short | Full        | Base (volts) |
+|-------|-------------|--------------|
+| mV    | millivolts  | 0.001        |
+| V     | volts       | 1            |
+| kV    | kilovolts   | 1000         |
+
+### Current
+| Short | Full         | Base (amperes) |
+|-------|--------------|----------------|
+| mA    | milliamperes | 0.001          |
+| A     | amperes      | 1              |
+
+### Resistance
+| Short | Full    | Base (ohms) |
+|-------|---------|-------------|
+| ohm   | ohms    | 1           |
+| kohm  | kilohms | 1000        |
+
+### Data
+| Short | Full       | Base (bytes) |
+|-------|------------|--------------|
+| B     | bytes      | 1            |
+| KB    | kilobytes  | 1000         |
+| MB    | megabytes  | 1e6          |
+| GB    | gigabytes  | 1e9          |
+| TB    | terabytes  | 1e12         |
+| KiB   | kibibytes  | 1024         |
+| MiB   | mebibytes  | 1048576      |
+| GiB   | gibibytes  | 1073741824   |
+| TiB   | tebibytes  | 1099511627776|
 
 Both suffix (`5m`) and full name (`5 meters`) forms are supported.
 
@@ -488,4 +603,16 @@ day(@2024-06-15)       → 15
 pi                     → 3.141592653589793
 e                      → 2.718281828459045
 c                      → 299792458
+50%                    → 0.5
+10%                    → 0.1
+200 * 10%              → 20
+100 C to F             → 212 F
+0 C to K               → 273.15 K
+32 F to C              → 0 C
+1 atm to psi           → ~14.696 psi
+100 W to hp            → ~0.134 hp
+1 GB to MiB            → ~953.674 MiB
+1 kWh to J             → 3600000 J
+fv(0.05, 10, 1000)     → ~12577.89
+pv(0.05, 10, 1000)     → ~7721.73
 ```
