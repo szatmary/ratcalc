@@ -170,9 +170,9 @@ func formatRat(r *big.Rat) string {
 	}
 
 	denom := new(big.Int).Set(r.Denom())
-	thousand := big.NewInt(1000)
+	limit := big.NewInt(10000)
 
-	if denom.Cmp(thousand) <= 0 {
+	if denom.Cmp(limit) <= 0 {
 		return r.RatString()
 	}
 

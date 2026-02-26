@@ -100,7 +100,7 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"second(@2024-06-15T10:30:45)", "45"},
 
 		// Constants
-		{"c", "299792458"},
+		{"c", "299792458 m/s"},
 
 		// AU unit
 		{"1 au to km", "1495978707/10 km"},

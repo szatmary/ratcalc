@@ -294,7 +294,7 @@ Extract components from a time value. Returns an integer.
 |------|-------|-------------|
 | `pi` | 3.141592653589793 | Ratio of circumference to diameter |
 | `e`  | 2.718281828459045 | Euler's number |
-| `c`  | 299792458 | Speed of light (m/s) |
+| `c`  | 299792458 m/s | Speed of light |
 
 ## Units
 
@@ -613,7 +613,7 @@ month(@2024-06-15)     → 6
 day(@2024-06-15)       → 15
 pi                     → 3.141592653589793
 e                      → 2.718281828459045
-c                      → 299792458
+c                      → 299792458 m/s
 50%                    → 0.5
 10%                    → 0.1
 200 * 10%              → 20

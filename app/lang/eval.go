@@ -56,9 +56,10 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 				v.Num.Unit = decUnit
 				return v, nil
 			case "c":
-				v := dimless(new(big.Rat).Set(cRat))
-				v.Num.Unit = decUnit
-				return v, nil
+				return CompoundValue{
+					Num: Value{Rat: new(big.Rat).Set(cRat), Unit: *LookupUnit("m")},
+					Den: Value{Rat: new(big.Rat).SetInt64(1), Unit: *LookupUnit("s")},
+				}, nil
 			}
 			return CompoundValue{}, &EvalError{Msg: "undefined variable: " + n.Name}
 		}
