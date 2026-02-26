@@ -334,10 +334,10 @@ Extract components from a time value. Returns an integer.
 | yr    | years      | 31557600 (365.25 days) |
 
 ### Volume
-| Short | Full       | Base (mL)     |
+| Short | Full       | Base (L)      |
 |-------|------------|---------------|
-| mL    | milliliters| 1             |
-| L     | liters     | 1000          |
+| mL    | milliliters| 0.001         |
+| L     | liters     | 1             |
 | floz  | floz       | 29.5735       |
 | cup   | cups       | 236.588       |
 | pt    | pints      | 473.176       |
@@ -418,6 +418,11 @@ Temperature units cannot appear in compound units (no `C/s`).
 ### Data
 | Short | Full       | Base (bytes) |
 |-------|------------|--------------|
+| bit   | bits       | 1/8          |
+| kbit  | kilobits   | 125          |
+| Mbit  | megabits   | 125000       |
+| Gbit  | gigabits   | 125000000    |
+| Tbit  | terabits   | 125000000000 |
 | B     | bytes      | 1            |
 | KB    | kilobytes  | 1000         |
 | MB    | megabytes  | 1e6          |

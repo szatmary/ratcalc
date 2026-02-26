@@ -12,6 +12,7 @@ const (
 	UnitLength
 	UnitWeight
 	UnitTime
+	UnitTimestamp
 	UnitVolume
 	UnitTemperature
 	UnitPressure
@@ -22,7 +23,6 @@ const (
 	UnitCurrent
 	UnitResistance
 	UnitData
-	UnitTimestamp
 )
 
 // Unit defines a unit with its category and conversion factor to the base unit.
@@ -95,14 +95,14 @@ var allUnits = []*Unit{
 	{Short: "wk", Full: "week", FullPl: "weeks", Category: UnitTime, ToBase: ratFromFrac(604800, 1)},
 	{Short: "yr", Full: "year", FullPl: "years", Category: UnitTime, ToBase: ratFromFrac(31557600, 1)},
 
-	// Volume (base: milliliters)
-	{Short: "mL", Full: "milliliter", FullPl: "milliliters", Category: UnitVolume, ToBase: ratFromFrac(1, 1)},
-	{Short: "L", Full: "liter", FullPl: "liters", Category: UnitVolume, ToBase: ratFromFrac(1000, 1)},
-	{Short: "floz", Full: "floz", FullPl: "floz", Category: UnitVolume, ToBase: ratFromFrac(473176473, 16000000)},
-	{Short: "cup", Full: "cup", FullPl: "cups", Category: UnitVolume, ToBase: ratFromFrac(473176473, 2000000)},
-	{Short: "pt", Full: "pint", FullPl: "pints", Category: UnitVolume, ToBase: ratFromFrac(473176473, 1000000)},
-	{Short: "qt", Full: "quart", FullPl: "quarts", Category: UnitVolume, ToBase: ratFromFrac(473176473, 500000)},
-	{Short: "gal", Full: "gallon", FullPl: "gallons", Category: UnitVolume, ToBase: ratFromFrac(473176473, 125000)},
+	// Volume (base: liters)
+	{Short: "mL", Full: "milliliter", FullPl: "milliliters", Category: UnitVolume, ToBase: ratFromFrac(1, 1000)},
+	{Short: "L", Full: "liter", FullPl: "liters", Category: UnitVolume, ToBase: ratFromFrac(1, 1)},
+	{Short: "floz", Full: "floz", FullPl: "floz", Category: UnitVolume, ToBase: ratFromFrac(473176473, 16000000000)},
+	{Short: "cup", Full: "cup", FullPl: "cups", Category: UnitVolume, ToBase: ratFromFrac(473176473, 2000000000)},
+	{Short: "pt", Full: "pint", FullPl: "pints", Category: UnitVolume, ToBase: ratFromFrac(473176473, 1000000000)},
+	{Short: "qt", Full: "quart", FullPl: "quarts", Category: UnitVolume, ToBase: ratFromFrac(473176473, 500000000)},
+	{Short: "gal", Full: "gallon", FullPl: "gallons", Category: UnitVolume, ToBase: ratFromFrac(473176473, 125000000)},
 
 	// Temperature (base: kelvin)
 	{Short: "K", Full: "kelvin", FullPl: "kelvin", Category: UnitTemperature, ToBase: ratFromFrac(1, 1)},
@@ -150,6 +150,11 @@ var allUnits = []*Unit{
 	{Short: "kohm", Full: "kilohm", FullPl: "kilohms", Category: UnitResistance, ToBase: ratFromFrac(1000, 1)},
 
 	// Data (base: bytes)
+	{Short: "bit", Full: "bit", FullPl: "bits", Category: UnitData, ToBase: ratFromFrac(1, 8)},
+	{Short: "kbit", Full: "kilobit", FullPl: "kilobits", Category: UnitData, ToBase: ratFromFrac(125, 1)},
+	{Short: "Mbit", Full: "megabit", FullPl: "megabits", Category: UnitData, ToBase: ratFromFrac(125000, 1)},
+	{Short: "Gbit", Full: "gigabit", FullPl: "gigabits", Category: UnitData, ToBase: ratFromFrac(125000000, 1)},
+	{Short: "Tbit", Full: "terabit", FullPl: "terabits", Category: UnitData, ToBase: ratFromFrac(125000000000, 1)},
 	{Short: "B", Full: "byte", FullPl: "bytes", Category: UnitData, ToBase: ratFromFrac(1, 1)},
 	{Short: "KB", Full: "kilobyte", FullPl: "kilobytes", Category: UnitData, ToBase: ratFromFrac(1000, 1)},
 	{Short: "MB", Full: "megabyte", FullPl: "megabytes", Category: UnitData, ToBase: ratFromFrac(1000000, 1)},
