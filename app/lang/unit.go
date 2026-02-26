@@ -69,6 +69,9 @@ func preOffsetRat(u Unit) *big.Rat {
 
 var allUnits = []*Unit{
 	// Length (base: meters)
+	{Short: "pm", Full: "picometer", FullPl: "picometers", Category: UnitLength, ToBase: ratFromFrac(1, 1000000000000)},
+	{Short: "nm", Full: "nanometer", FullPl: "nanometers", Category: UnitLength, ToBase: ratFromFrac(1, 1000000000)},
+	{Short: "um", Full: "micrometer", FullPl: "micrometers", Category: UnitLength, ToBase: ratFromFrac(1, 1000000)},
 	{Short: "mm", Full: "millimeter", FullPl: "millimeters", Category: UnitLength, ToBase: ratFromFrac(1, 1000)},
 	{Short: "cm", Full: "centimeter", FullPl: "centimeters", Category: UnitLength, ToBase: ratFromFrac(1, 100)},
 	{Short: "m", Full: "meter", FullPl: "meters", Category: UnitLength, ToBase: ratFromFrac(1, 1)},

@@ -606,6 +606,16 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 	case "round":
 		return evalRatFunc1(n, env, ratRound)
 
+	case "num":
+		if len(n.Args) != 1 {
+			return CompoundValue{}, &EvalError{Msg: "num() takes 1 argument"}
+		}
+		val, err := Eval(n.Args[0], env)
+		if err != nil {
+			return CompoundValue{}, err
+		}
+		return dimless(val.DisplayRat()), nil
+
 	case "pow":
 		return evalPow(n, env)
 	case "mod":

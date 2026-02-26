@@ -210,7 +210,8 @@ A value may carry an optional unit. Arithmetic checks unit compatibility:
 
 ## Variables
 
-Variable names are single words that must start with a letter.
+Variable names are single words that must start with a letter. They may contain
+letters, digits, and underscores.
 
 ```
 x = 10
@@ -260,6 +261,12 @@ Values with units or time flags are rejected.
 | `max(x, y)` | 2 | Maximum of x and y |
 | `atan2(y, x)` | 2 | Two-argument arctangent (radians) |
 
+### Utility Functions
+
+| Function | Args | Description |
+|----------|------|-------------|
+| `num(x)` | 1 | Strip units, return the display value as a pure number |
+
 ### Financial Functions
 
 Financial functions use float64 math internally. All arguments must be
@@ -301,6 +308,9 @@ Extract components from a time value. Returns an integer.
 ### Length
 | Short | Full       | Base (meters) |
 |-------|------------|---------------|
+| pm    | picometers | 1e-12         |
+| nm    | nanometers | 1e-9          |
+| um    | micrometers| 1e-6          |
 | mm    | millimeters| 0.001         |
 | cm    | centimeters| 0.01          |
 | m     | meters     | 1             |

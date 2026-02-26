@@ -169,6 +169,7 @@ nav button.active {
   <button class="active" onclick="showTab('calc')">Calculator</button>
   <button onclick="showTab('lang')">Language</button>
   <button onclick="shareLink()">Share</button>
+  <button onclick="clearEditor()">Clear</button>
   <button onclick="window.open('https://github.com/szatmary/ratcalc','_blank')">GitHub</button>
 </nav>
 <div id="calc-container">
@@ -201,6 +202,19 @@ var lineNumbers = document.getElementById('line-numbers');
 var resultsDiv = document.getElementById('results');
 var nowInterval = null;
 
+function measureMaxChars() {
+  if (typeof setMaxDisplayLen !== 'function') return;
+  var style = getComputedStyle(resultsDiv);
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.font = style.fontSize + ' ' + style.fontFamily;
+  var charW = ctx.measureText('0').width;
+  var pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  var maxChars = Math.floor((resultsDiv.clientWidth - pad) / charW);
+  if (maxChars > 0) setMaxDisplayLen(maxChars);
+}
+window.addEventListener('resize', measureMaxChars);
+
 function runEval(nowTicked) {
   if (typeof evaluate !== 'function') return;
   var results = evaluate(editor.value, nowTicked);
@@ -229,6 +243,13 @@ function runEval(nowTicked) {
   resultsDiv.innerHTML = rHtml;
 }
 
+function clearEditor() {
+  editor.value = '';
+  try { localStorage.removeItem('ratcalc_text'); } catch(e) {}
+  runEval(false);
+  editor.focus();
+}
+
 function escapeHtml(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -236,6 +257,20 @@ function escapeHtml(s) {
 
 editor.addEventListener('input', function() {
   runEval(false);
+  try { localStorage.setItem('ratcalc_text', editor.value); } catch(e) {}
+});
+
+// --- Save as .txt with Cmd/Ctrl+S ---
+document.addEventListener('keydown', function(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    var blob = new Blob([editor.value], {type: 'text/plain'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ratcalc.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 });
 
 // --- Scroll sync ---
@@ -292,7 +327,13 @@ function shareLink() {
         var text = decompress(base64urlDecode(encodedParam));
         if (text) editor.value = text;
       } catch(e) { console.error('Failed to decode shared text:', e); }
+    } else {
+      try {
+        var saved = localStorage.getItem('ratcalc_text');
+        if (saved) editor.value = saved;
+      } catch(e) {}
     }
+    measureMaxChars();
     runEval(false);
     editor.focus();
   };

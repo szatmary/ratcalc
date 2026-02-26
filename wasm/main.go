@@ -38,6 +38,14 @@ func main() {
 		return arr
 	}))
 
+	// Register setMaxDisplayLen for dynamic gutter width
+	js.Global().Set("setMaxDisplayLen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) >= 1 {
+			lang.MaxDisplayLen = args[0].Int()
+		}
+		return nil
+	}))
+
 	// Register getEditorText for share link
 	js.Global().Set("getEditorText", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		return editorText

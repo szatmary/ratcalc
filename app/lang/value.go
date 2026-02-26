@@ -164,20 +164,49 @@ func formatDecimal(r *big.Rat) string {
 	return ratToDecimal(r, 10)
 }
 
+// MaxDisplayLen is the max character width for a result in the gutter.
+// Set by the UI layer based on actual measured width.
+var MaxDisplayLen = 32
+
 func formatRat(r *big.Rat) string {
 	if r.IsInt() {
-		return r.Num().String()
+		s := r.Num().String()
+		if len(s) <= MaxDisplayLen {
+			return s
+		}
+		return formatSci(r)
 	}
 
-	denom := new(big.Int).Set(r.Denom())
-	limit := big.NewInt(10000)
-
-	if denom.Cmp(limit) <= 0 {
-		return r.RatString()
+	// Try fraction form first
+	frac := r.RatString()
+	if len(frac) <= MaxDisplayLen {
+		return frac
 	}
 
-	// Convert to decimal string
-	return ratToDecimal(r, 10)
+	// Try decimal — but reject if it lost all significance (e.g. "0.")
+	dec := ratToDecimal(r, 10)
+	if len(dec) <= MaxDisplayLen && !strings.HasSuffix(dec, ".") {
+		return dec
+	}
+
+	return formatSci(r)
+}
+
+// formatSci formats a rational in scientific notation (e.g. 1.23e15).
+func formatSci(r *big.Rat) string {
+	f, _ := r.Float64()
+	if f == 0 {
+		return "0"
+	}
+	s := fmt.Sprintf("%e", f)
+	// Trim trailing zeros in mantissa: 1.230000e+02 → 1.23e+02
+	parts := strings.SplitN(s, "e", 2)
+	if len(parts) == 2 {
+		m := strings.TrimRight(parts[0], "0")
+		m = strings.TrimRight(m, ".")
+		s = m + "e" + parts[1]
+	}
+	return s
 }
 
 // ratToDecimal converts a rational to a decimal string with up to `prec` digits

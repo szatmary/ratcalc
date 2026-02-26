@@ -175,16 +175,8 @@ func (p *Parser) parsePostfix() (Node, error) {
 		return node, nil
 	}
 
-	// Check if next token is a WORD that matches a known unit
-	if p.peek().Type == TOKEN_WORD {
-		u := LookupUnit(p.peek().Literal)
-		if u != nil {
-			p.advance() // consume the unit token
-			return &UnitExpr{Expr: node, Unit: SimpleUnit(*u)}, nil
-		}
-	}
-
-	// Check for AM/PM postfix on time-producing nodes (e.g. "3:30 PM")
+	// Check for AM/PM postfix on time-producing nodes before unit lookup
+	// (avoids "pm" matching picometers instead of PM)
 	if p.peek().Type == TOKEN_WORD && isAMPM(p.peek().Literal) {
 		if isTimeProducing(node) {
 			isPM := strings.EqualFold(p.advance().Literal, "PM")
@@ -197,6 +189,15 @@ func (p *Parser) parsePostfix() (Node, error) {
 		if isTimeProducing(node) {
 			tz := p.advance().Literal
 			return &TZExpr{Expr: node, TZ: tz, IsInput: true}, nil
+		}
+	}
+
+	// Check if next token is a WORD that matches a known unit
+	if p.peek().Type == TOKEN_WORD {
+		u := LookupUnit(p.peek().Literal)
+		if u != nil {
+			p.advance() // consume the unit token
+			return &UnitExpr{Expr: node, Unit: SimpleUnit(*u)}, nil
 		}
 	}
 
