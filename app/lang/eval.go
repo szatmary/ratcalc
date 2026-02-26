@@ -18,7 +18,7 @@ type Env map[string]CompoundValue
 
 // tsVal builds a timestamp CompoundValue from a rational (unix seconds).
 func tsVal(r *big.Rat) CompoundValue {
-	return simpleVal(Value{Rat: *new(big.Rat).Set(r), Unit: tsUnit})
+	return simpleVal(Value{Rat: new(big.Rat).Set(r), Unit: tsUnit})
 }
 
 // Eval evaluates an AST node in the given environment.
@@ -43,9 +43,7 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 		if !ok {
 			// Try looking up as a unit — bare unit word implies 1
 			if u := LookupUnit(n.Name); u != nil {
-				var numRat big.Rat
-				numRat.Set(toBaseRat(*u))
-				return simpleVal(Value{Rat: numRat, Unit: *u}), nil
+				return simpleVal(Value{Rat: new(big.Rat).Set(toBaseRat(*u)), Unit: *u}), nil
 			}
 			// Built-in constants
 			switch n.Name {
@@ -103,9 +101,7 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 		if err != nil {
 			return CompoundValue{}, err
 		}
-		hundred := new(big.Rat).SetInt64(100)
-		eff := val.effectiveRat()
-		r := new(big.Rat).Quo(eff, hundred)
+		r := new(big.Rat).Quo(val.effectiveRat(), new(big.Rat).SetInt64(100))
 		v := dimless(r)
 		v.Num.Unit = decUnit
 		return v, nil
@@ -121,9 +117,8 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 			if !valCU.Compatible(n.Unit) {
 				return CompoundValue{}, &EvalError{Msg: "cannot convert " + valCU.String() + " to " + n.Unit.String()}
 			}
-			// Offset-based conversion (temperature) — values stored in display units
+			// Offset-based conversion (temperature)
 			if valCU.HasOffset() || n.Unit.HasOffset() {
-				// Offset units only allowed as simple units
 				if val.Den.Unit.Category != UnitNumber || n.Unit.Den.Category != UnitNumber {
 					return CompoundValue{}, &EvalError{Msg: "temperature units cannot be used in compound units"}
 				}
@@ -131,13 +126,11 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 				to := n.Unit.Num
 				eff := val.effectiveRat()
 				v := new(big.Rat).Set(eff)
-				// Convert to base (kelvin): kelvin = (val + from.PreOffset) * from.ToBase
 				v.Add(v, preOffsetRat(from))
 				v.Mul(v, toBaseRat(from))
-				// Convert from base to target: result = kelvin / to.ToBase - to.PreOffset
 				v.Quo(v, toBaseRat(to))
 				v.Sub(v, preOffsetRat(to))
-				return simpleVal(Value{Rat: *v, Unit: to}), nil
+				return simpleVal(Value{Rat: v, Unit: to}), nil
 			}
 			// Rat is already in base units — just change display unit
 			val.Num.Unit = n.Unit.Num
@@ -147,20 +140,20 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 		// First unit attachment — convert to base units (except offset-based like temperature)
 		eff := val.effectiveRat()
 		if n.Unit.HasOffset() {
-			// Offset-based units (temperature): store in display units, not base
-			return simpleVal(Value{Rat: *new(big.Rat).Set(eff), Unit: n.Unit.Num}), nil
+			return simpleVal(Value{Rat: new(big.Rat).Set(eff), Unit: n.Unit.Num}), nil
 		}
-		var numRat big.Rat
-		numRat.Set(eff)
+		numRat := new(big.Rat).Set(eff)
 		if n.Unit.Num.Category != UnitNumber {
-			numRat.Mul(&numRat, toBaseRat(n.Unit.Num))
+			numRat.Mul(numRat, toBaseRat(n.Unit.Num))
 		}
-		var denRat big.Rat
-		denRat.SetInt64(1)
+		denRat := new(big.Rat).SetInt64(1)
 		if n.Unit.Den.Category != UnitNumber {
-			denRat.Mul(&denRat, toBaseRat(n.Unit.Den))
+			denRat.Mul(denRat, toBaseRat(n.Unit.Den))
 		}
-		return CompoundValue{Num: Value{Rat: numRat, Unit: n.Unit.Num}, Den: Value{Rat: denRat, Unit: n.Unit.Den}}, nil
+		return CompoundValue{
+			Num: Value{Rat: numRat, Unit: n.Unit.Num},
+			Den: Value{Rat: denRat, Unit: n.Unit.Den},
+		}, nil
 
 	case *Assignment:
 		val, err := Eval(n.Expr, env)
@@ -204,14 +197,11 @@ func ParseLine(line string) (Node, error) {
 }
 
 func evalTimeLit(raw string) (CompoundValue, error) {
-	// Parse HH:MM or HH:MM:SS
 	var h, m, s int
 	var err error
 	if len(raw) > 5 {
-		// HH:MM:SS
 		_, err = fmt.Sscanf(raw, "%d:%d:%d", &h, &m, &s)
 	} else {
-		// HH:MM (or H:MM)
 		_, err = fmt.Sscanf(raw, "%d:%d", &h, &m)
 	}
 	if err != nil {
@@ -220,11 +210,9 @@ func evalTimeLit(raw string) (CompoundValue, error) {
 	if h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59 {
 		return CompoundValue{}, &EvalError{Msg: "invalid time: " + raw}
 	}
-	// Get today's date in UTC, set the time
 	now := time.Now().UTC()
 	t := time.Date(now.Year(), now.Month(), now.Day(), h, m, s, 0, time.UTC)
-	r := new(big.Rat).SetInt64(t.Unix())
-	return tsVal(r), nil
+	return tsVal(new(big.Rat).SetInt64(t.Unix())), nil
 }
 
 func evalAMPM(n *AMPMExpr, env Env) (CompoundValue, error) {
@@ -235,19 +223,17 @@ func evalAMPM(n *AMPMExpr, env Env) (CompoundValue, error) {
 	if !val.IsTimestamp() {
 		return CompoundValue{}, &EvalError{Msg: "AM/PM can only be applied to time values"}
 	}
-	// Extract the hour from the UTC time
 	unix := val.Num.Rat.Num().Int64() / val.Num.Rat.Denom().Int64()
 	t := time.Unix(unix, 0).UTC()
 	h := t.Hour()
 
 	if n.IsPM {
 		if h < 12 {
-			val.Num.Add(&val.Num.Rat, new(big.Rat).SetInt64(12*3600))
+			val.Num.Rat = new(big.Rat).Add(val.Num.Rat, new(big.Rat).SetInt64(12*3600))
 		}
 	} else {
-		// AM
 		if h == 12 {
-			val.Num.Sub(&val.Num.Rat, new(big.Rat).SetInt64(12*3600))
+			val.Num.Rat = new(big.Rat).Sub(val.Num.Rat, new(big.Rat).SetInt64(12*3600))
 		}
 	}
 	return val, nil
@@ -268,8 +254,7 @@ func evalTZExpr(n *TZExpr, env Env) (CompoundValue, error) {
 	if n.IsInput {
 		loc := tzUnit.PreOffset.(time.Location)
 		_, offset := time.Unix(val.Num.Rat.Num().Int64()/val.Num.Rat.Denom().Int64(), 0).In(&loc).Zone()
-		adjustment := new(big.Rat).SetInt64(int64(offset))
-		val.Num.Sub(&val.Num.Rat, adjustment)
+		val.Num.Rat = new(big.Rat).Sub(val.Num.Rat, new(big.Rat).SetInt64(int64(offset)))
 	}
 	val.Num.Unit = tzUnit
 	return val, nil
@@ -369,8 +354,7 @@ func evalTimeExtract(n *FuncCall, env Env, extract func(time.Time) int) (Compoun
 		loc = &tz
 	}
 	t := time.Unix(unix, 0).In(loc)
-	r := new(big.Rat).SetInt64(int64(extract(t)))
-	return dimless(r), nil
+	return dimless(new(big.Rat).SetInt64(int64(extract(t)))), nil
 }
 
 // ratFloor returns floor(x) as an integer-valued *big.Rat.
@@ -387,8 +371,7 @@ func ratFloor(x *big.Rat) *big.Rat {
 
 // ratCeil returns ceil(x) as an integer-valued *big.Rat.
 func ratCeil(x *big.Rat) *big.Rat {
-	neg := new(big.Rat).Neg(x)
-	return new(big.Rat).Neg(ratFloor(neg))
+	return new(big.Rat).Neg(ratFloor(new(big.Rat).Neg(x)))
 }
 
 // ratRound returns round(x) with half away from zero.
@@ -411,8 +394,7 @@ func evalRatFunc1(n *FuncCall, env Env, fn func(*big.Rat) *big.Rat) (CompoundVal
 	if !val.IsEmpty() {
 		return CompoundValue{}, &EvalError{Msg: n.Name + "() requires a dimensionless value"}
 	}
-	eff := val.effectiveRat()
-	v := dimless(fn(eff))
+	v := dimless(fn(val.effectiveRat()))
 	v.Num.Unit = decUnit
 	return v, nil
 }
@@ -435,9 +417,7 @@ func evalRatFunc2(n *FuncCall, env Env, fn func(*big.Rat, *big.Rat) *big.Rat) (C
 	if !b.IsEmpty() {
 		return CompoundValue{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
-	aEff := a.effectiveRat()
-	bEff := b.effectiveRat()
-	v := dimless(fn(aEff, bEff))
+	v := dimless(fn(a.effectiveRat(), b.effectiveRat()))
 	v.Num.Unit = decUnit
 	return v, nil
 }
@@ -462,17 +442,14 @@ func evalPow(n *FuncCall, env Env) (CompoundValue, error) {
 	}
 	baseR := base.effectiveRat()
 	expR := exp.effectiveRat()
-	// If exponent is integer, use exact rational arithmetic
 	if expR.IsInt() {
 		e := expR.Num().Int64()
 		neg := e < 0
 		if neg {
 			e = -e
 		}
-		num := new(big.Int).Set(baseR.Num())
-		den := new(big.Int).Set(baseR.Denom())
-		num.Exp(num, big.NewInt(e), nil)
-		den.Exp(den, big.NewInt(e), nil)
+		num := new(big.Int).Exp(new(big.Int).Set(baseR.Num()), big.NewInt(e), nil)
+		den := new(big.Int).Exp(new(big.Int).Set(baseR.Denom()), big.NewInt(e), nil)
 		r := new(big.Rat).SetFrac(num, den)
 		if neg {
 			if r.Sign() == 0 {
@@ -484,7 +461,6 @@ func evalPow(n *FuncCall, env Env) (CompoundValue, error) {
 		v.Num.Unit = decUnit
 		return v, nil
 	}
-	// Fractional exponent: fall back to float64
 	return evalMathFunc2(n, env, math.Pow)
 }
 
@@ -494,8 +470,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		if len(n.Args) != 0 {
 			return CompoundValue{}, &EvalError{Msg: "now() takes no arguments"}
 		}
-		r := new(big.Rat).SetInt64(time.Now().Unix())
-		return tsVal(r), nil
+		return tsVal(new(big.Rat).SetInt64(time.Now().Unix())), nil
 
 	case "date":
 		if len(n.Args) != 3 && len(n.Args) != 6 {
@@ -519,8 +494,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		} else {
 			t = time.Date(vals[0], time.Month(vals[1]), vals[2], vals[3], vals[4], vals[5], 0, time.UTC)
 		}
-		r := new(big.Rat).SetInt64(t.Unix())
-		return tsVal(r), nil
+		return tsVal(new(big.Rat).SetInt64(t.Unix())), nil
 
 	case "time":
 		if len(n.Args) != 2 && len(n.Args) != 3 {
@@ -548,8 +522,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		}
 		now := time.Now().UTC()
 		tt := time.Date(now.Year(), now.Month(), now.Day(), h, m, s, 0, time.UTC)
-		r := new(big.Rat).SetInt64(tt.Unix())
-		return tsVal(r), nil
+		return tsVal(new(big.Rat).SetInt64(tt.Unix())), nil
 
 	case "__to_unix":
 		if len(n.Args) != 1 {
@@ -586,9 +559,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		case "__to_oct":
 			baseUnit = octUnit
 		}
-		// Strip to dimensionless display value, then set base unit
-		dr := val.DisplayRat()
-		v := dimless(dr)
+		v := dimless(val.DisplayRat())
 		v.Num.Unit = baseUnit
 		return v, nil
 
@@ -603,9 +574,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 		if !val.IsEmpty() {
 			return CompoundValue{}, &EvalError{Msg: "unix() value must be dimensionless"}
 		}
-		eff := val.effectiveRat()
-		r := autoDetectUnixPrecision(eff)
-		return tsVal(r), nil
+		return tsVal(autoDetectUnixPrecision(val.effectiveRat())), nil
 
 	case "sin":
 		return evalMathFunc1(n, env, math.Sin)
@@ -691,10 +660,7 @@ func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {
 // autoDetectUnixPrecision converts a unix timestamp to seconds, auto-detecting
 // if the input is in seconds, milliseconds, microseconds, or nanoseconds.
 func autoDetectUnixPrecision(r *big.Rat) *big.Rat {
-	v := new(big.Rat).Set(r)
-	if v.Sign() < 0 {
-		v.Neg(v)
-	}
+	v := new(big.Rat).Abs(r)
 
 	threshMs := new(big.Rat).SetInt64(1e12)
 	threshUs := new(big.Rat).SetInt64(1e15)

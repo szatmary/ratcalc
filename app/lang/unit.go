@@ -32,10 +32,10 @@ type Unit struct {
 	FullPl   string       // full plural name (e.g. "meters")
 	Category UnitCategory
 	// ToBase is the conversion factor: value_in_base = (value + PreOffset) * ToBase
-	// big.Rat for physical units, int for display base (10/2/8/16).
+	// *big.Rat for physical units, int for display base (10/2/8/16).
 	ToBase any
 	// PreOffset is added before multiplying by ToBase.
-	// big.Rat for temperature offset, time.Location for timezone.
+	// *big.Rat for temperature offset, time.Location for timezone.
 	// nil means no offset.
 	PreOffset any
 }
@@ -45,26 +45,24 @@ func (u *Unit) HasOffset() bool {
 	return u.Category == UnitTemperature
 }
 
-func ratFromFrac(num, denom int64) big.Rat {
-	var r big.Rat
-	r.SetFrac64(num, denom)
-	return r
+func ratFromFrac(num, denom int64) *big.Rat {
+	return new(big.Rat).SetFrac64(num, denom)
 }
 
-// toBaseRat extracts the big.Rat conversion factor from a Unit's ToBase field.
-// Returns a pointer to a copy. Defaults to 1/1 if ToBase is nil or non-Rat.
+// toBaseRat extracts the *big.Rat conversion factor from a Unit's ToBase field.
+// Defaults to 1/1 if ToBase is nil or non-Rat.
 func toBaseRat(u Unit) *big.Rat {
-	if r, ok := u.ToBase.(big.Rat); ok {
-		return new(big.Rat).Set(&r)
+	if r, ok := u.ToBase.(*big.Rat); ok {
+		return r
 	}
 	return new(big.Rat).SetInt64(1)
 }
 
-// preOffsetRat extracts the big.Rat offset from a Unit's PreOffset field.
-// Returns a pointer to a copy. Defaults to 0/1 if PreOffset is nil or non-Rat.
+// preOffsetRat extracts the *big.Rat offset from a Unit's PreOffset field.
+// Defaults to 0/1 if PreOffset is nil or non-Rat.
 func preOffsetRat(u Unit) *big.Rat {
-	if r, ok := u.PreOffset.(big.Rat); ok {
-		return new(big.Rat).Set(&r)
+	if r, ok := u.PreOffset.(*big.Rat); ok {
+		return r
 	}
 	return new(big.Rat)
 }
