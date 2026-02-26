@@ -31,7 +31,7 @@ func Parse(tokens []Token) (Node, error) {
 		return p.parseAssignment(eqIdx)
 	}
 
-	node, err := p.parseExpression()
+	node, err := p.parseBitwiseOr()
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (p *Parser) parseAssignment(eqIdx int) (Node, error) {
 	// Skip past the '='
 	p.pos = eqIdx + 1
 
-	expr, err := p.parseExpression()
+	expr, err := p.parseBitwiseOr()
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +108,74 @@ func (p *Parser) advance() Token {
 		p.pos++
 	}
 	return t
+}
+
+// parseBitwiseOr: bitwiseXor ( "|" bitwiseXor )*
+func (p *Parser) parseBitwiseOr() (Node, error) {
+	left, err := p.parseBitwiseXor()
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().Type == TOKEN_PIPE {
+		op := p.advance()
+		right, err := p.parseBitwiseXor()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Type, Left: left, Right: right}
+	}
+	return left, nil
+}
+
+// parseBitwiseXor: bitwiseAnd ( "^" bitwiseAnd )*
+func (p *Parser) parseBitwiseXor() (Node, error) {
+	left, err := p.parseBitwiseAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().Type == TOKEN_CARET {
+		op := p.advance()
+		right, err := p.parseBitwiseAnd()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Type, Left: left, Right: right}
+	}
+	return left, nil
+}
+
+// parseBitwiseAnd: shift ( "&" shift )*
+func (p *Parser) parseBitwiseAnd() (Node, error) {
+	left, err := p.parseShift()
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().Type == TOKEN_AMP {
+		op := p.advance()
+		right, err := p.parseShift()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Type, Left: left, Right: right}
+	}
+	return left, nil
+}
+
+// parseShift: expression ( ("<<" | ">>") expression )*
+func (p *Parser) parseShift() (Node, error) {
+	left, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+	for p.peek().Type == TOKEN_LSHIFT || p.peek().Type == TOKEN_RSHIFT {
+		op := p.advance()
+		right, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Type, Left: left, Right: right}
+	}
+	return left, nil
 }
 
 // parseExpression: term ( ("+" | "-") term )*
@@ -148,9 +216,9 @@ func (p *Parser) parseTerm() (Node, error) {
 	return left, nil
 }
 
-// parseUnary: "-" unary | postfix
+// parseUnary: ("-" | "~") unary | exponent
 func (p *Parser) parseUnary() (Node, error) {
-	if p.peek().Type == TOKEN_MINUS {
+	if p.peek().Type == TOKEN_MINUS || p.peek().Type == TOKEN_TILDE {
 		op := p.advance()
 		operand, err := p.parseUnary()
 		if err != nil {
@@ -158,7 +226,25 @@ func (p *Parser) parseUnary() (Node, error) {
 		}
 		return &UnaryExpr{Op: op.Type, Operand: operand}, nil
 	}
-	return p.parsePostfix()
+	return p.parseExponent()
+}
+
+// parseExponent: postfix ( "**" unary )? — right-associative
+func (p *Parser) parseExponent() (Node, error) {
+	left, err := p.parsePostfix()
+	if err != nil {
+		return nil, err
+	}
+	if p.peek().Type == TOKEN_STARSTAR {
+		op := p.advance()
+		// Right-associative: recurse into parseUnary
+		right, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryExpr{Op: op.Type, Left: left, Right: right}
+	}
+	return left, nil
 }
 
 // parsePostfix: primary ("%"? unit?)
@@ -166,6 +252,13 @@ func (p *Parser) parsePostfix() (Node, error) {
 	node, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
+	}
+
+	// Check for ! postfix (factorial)
+	if p.peek().Type == TOKEN_BANG {
+		p.advance() // consume '!'
+		node = &FactorialExpr{Expr: node}
+		return node, nil
 	}
 
 	// Check for % postfix
@@ -222,7 +315,7 @@ func (p *Parser) parsePrimary() (Node, error) {
 
 	case TOKEN_LPAREN:
 		p.advance() // consume '('
-		expr, err := p.parseExpression()
+		expr, err := p.parseBitwiseOr()
 		if err != nil {
 			return nil, err
 		}
@@ -247,6 +340,15 @@ func (p *Parser) parsePrimary() (Node, error) {
 			return p.parseFuncCall()
 		}
 		return p.parseVarRef()
+
+	case TOKEN_CURRENCY:
+		sym := p.advance()
+		expr, err := p.parsePrimary()
+		if err != nil {
+			return nil, err
+		}
+		u := LookupUnit(sym.Literal)
+		return &UnitExpr{Expr: expr, Unit: SimpleUnit(*u)}, nil
 
 	default:
 		return nil, &EvalError{Msg: "unexpected token: " + tok.Literal}
@@ -329,14 +431,14 @@ func (p *Parser) parseFuncCall() (Node, error) {
 
 	var args []Node
 	if p.peek().Type != TOKEN_RPAREN {
-		arg, err := p.parseExpression()
+		arg, err := p.parseBitwiseOr()
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, arg)
 		for p.peek().Type == TOKEN_COMMA {
 			p.advance() // consume ','
-			arg, err := p.parseExpression()
+			arg, err := p.parseBitwiseOr()
 			if err != nil {
 				return nil, err
 			}

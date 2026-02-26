@@ -1,7 +1,5 @@
 package lang
 
-import "fmt"
-
 // TokenType represents the type of a lexer token.
 type TokenType int
 
@@ -20,6 +18,15 @@ const (
 	TOKEN_AT
 	TOKEN_COMMA
 	TOKEN_PERCENT
+	TOKEN_BANG     // !
+	TOKEN_STARSTAR // **
+	TOKEN_AMP      // &
+	TOKEN_PIPE     // |
+	TOKEN_CARET    // ^
+	TOKEN_TILDE    // ~
+	TOKEN_LSHIFT   // <<
+	TOKEN_RSHIFT   // >>
+	TOKEN_CURRENCY // $ € £ ¥
 	TOKEN_TIME
 	TOKEN_EOF
 )
@@ -31,6 +38,3 @@ type Token struct {
 	Pos     int // byte offset in the input
 }
 
-func (t Token) String() string {
-	return fmt.Sprintf("Token(%d, %q, %d)", t.Type, t.Literal, t.Pos)
-}

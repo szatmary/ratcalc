@@ -23,6 +23,7 @@ const (
 	UnitCurrent
 	UnitResistance
 	UnitData
+	UnitCurrency
 )
 
 // Unit defines a unit with its category and conversion factor to the base unit.
@@ -171,18 +172,44 @@ var allUnits = []*Unit{
 	{Short: "MiB", Full: "mebibyte", FullPl: "mebibytes", Category: UnitData, ToBase: ratFromFrac(1048576, 1)},
 	{Short: "GiB", Full: "gibibyte", FullPl: "gibibytes", Category: UnitData, ToBase: ratFromFrac(1073741824, 1)},
 	{Short: "TiB", Full: "tebibyte", FullPl: "tebibytes", Category: UnitData, ToBase: ratFromFrac(1099511627776, 1)},
+
+	// Currency (base: each currency is its own base — no exchange rates)
+	{Short: "USD", Full: "dollar", FullPl: "dollars", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "EUR", Full: "euro", FullPl: "euros", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "GBP", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "JPY", Full: "yen", FullPl: "yen", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "CAD", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "AUD", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
+	{Short: "CHF", Category: UnitCurrency, ToBase: ratFromFrac(1, 1)},
 }
 
 // unitLookup maps short names, full singular, and full plural to unit pointers.
 var unitLookup map[string]*Unit
 
+// currencySymbols maps currency Short names to their display symbols.
+var currencySymbols = map[string]string{
+	"USD": "$",
+	"EUR": "€",
+	"GBP": "£",
+	"JPY": "¥",
+}
+
 func init() {
 	unitLookup = make(map[string]*Unit, len(allUnits)*3)
 	for _, u := range allUnits {
 		unitLookup[u.Short] = u
-		unitLookup[u.Full] = u
-		unitLookup[u.FullPl] = u
+		if u.Full != "" {
+			unitLookup[u.Full] = u
+		}
+		if u.FullPl != "" {
+			unitLookup[u.FullPl] = u
+		}
 	}
+	// Register currency symbol aliases
+	unitLookup["$"] = unitLookup["USD"]
+	unitLookup["€"] = unitLookup["EUR"]
+	unitLookup["£"] = unitLookup["GBP"]
+	unitLookup["¥"] = unitLookup["JPY"]
 }
 
 // LookupUnit looks up a unit by short name, full name, or plural name.
@@ -212,22 +239,6 @@ var (
 
 // hmsUnit is a sentinel for hours-minutes-seconds display. The value is in seconds.
 var hmsUnit = Unit{Short: "hms", Category: UnitNumber, ToBase: "hms"}
-
-// TimestampUnit returns a CompoundUnit representing an absolute timestamp.
-func TimestampUnit() CompoundUnit {
-	return SimpleUnit(tsUnit)
-}
-
-// Convert converts a rational value from one unit to another within the same category.
-// Returns the converted value in terms of the target unit.
-func Convert(val *big.Rat, from, to *Unit) (*big.Rat, error) {
-	if from.Category != to.Category {
-		return nil, &EvalError{Msg: "cannot convert between " + from.Short + " and " + to.Short}
-	}
-	result := new(big.Rat).Mul(val, toBaseRat(*from))
-	result.Quo(result, toBaseRat(*to))
-	return result, nil
-}
 
 // CompoundUnit represents a compound unit like mi/gal.
 // Dimensionless values use numUnit for both Num and Den.

@@ -118,6 +118,11 @@ func (v CompoundValue) String() string {
 		return formatHMS(v.effectiveRat())
 	}
 
+	// Check for currency display
+	if v.Num.Unit.Category == UnitCurrency && v.Den.Unit.Category == UnitNumber {
+		return formatCurrency(v)
+	}
+
 	dr := v.DisplayRat()
 	cu := v.CompoundUnit()
 
@@ -220,6 +225,36 @@ func formatHMS(r *big.Rat) string {
 		s = "-" + s
 	}
 	return s
+}
+
+// formatCurrency formats a currency value with 2 decimal places.
+// Uses symbol prefix for known currencies ($80.00, €50.00) and suffix for others (80.00 CAD).
+func formatCurrency(v CompoundValue) string {
+	dr := v.DisplayRat()
+
+	// Round to 2 decimal places: multiply by 100, round, divide by 100
+	scaled := new(big.Rat).Mul(dr, new(big.Rat).SetInt64(100))
+	rounded := ratRound(scaled)
+	cents := new(big.Int).Div(rounded.Num(), rounded.Denom())
+
+	neg := cents.Sign() < 0
+	absCents := new(big.Int).Abs(cents)
+
+	intPart := new(big.Int).Div(absCents, big.NewInt(100))
+	fracPart := new(big.Int).Mod(absCents, big.NewInt(100))
+
+	numStr := fmt.Sprintf("%s.%02d", intPart.String(), fracPart.Int64())
+	if neg {
+		numStr = "-" + numStr
+	}
+
+	if sym, ok := currencySymbols[v.Num.Unit.Short]; ok {
+		if neg {
+			return "-" + sym + numStr[1:] // -$80.00
+		}
+		return sym + numStr
+	}
+	return numStr + " " + v.Num.Unit.Short
 }
 
 // formatSci formats a rational in scientific notation (e.g. 1.23e15).

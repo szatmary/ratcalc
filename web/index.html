@@ -83,22 +83,31 @@ nav button.active {
   white-space: pre;
   tab-size: 4;
 }
-#results {
+#results-wrapper {
+  display: flex;
   width: 280px;
   min-width: 80px;
+}
+#results-drag {
+  width: 5px;
+  cursor: col-resize;
+  background: #313244;
+  flex-shrink: 0;
+}
+#results-drag:hover {
+  background: #585b70;
+}
+#results {
+  flex: 1;
   background: #181825;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 14px;
   line-height: 21px;
   padding: 8px 12px;
-  overflow: auto;
+  overflow: hidden;
   user-select: text;
-  border-left: 1px solid #313244;
-  resize: horizontal;
-  direction: rtl;
 }
 #results div {
-  direction: ltr;
   height: 21px;
   white-space: nowrap;
   overflow: hidden;
@@ -165,6 +174,51 @@ nav button.active {
   color: #a6adc8;
   margin: 8px 0;
 }
+
+/* --- Forex modal --- */
+#forex-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 2000;
+}
+#forex-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2001;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 420px;
+  text-align: center;
+}
+#forex-dialog p {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #cdd6f4;
+}
+#forex-dialog a {
+  display: inline-block;
+  margin: 8px 0 20px;
+  color: #89b4fa;
+  font-size: 15px;
+  text-decoration: none;
+}
+#forex-dialog a:hover { text-decoration: underline; }
+#forex-dialog button {
+  background: #313244;
+  color: #cdd6f4;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 24px;
+  font-size: 14px;
+  cursor: pointer;
+}
+#forex-dialog button:hover { background: #45475a; }
 </style>
 </head>
 <body>
@@ -178,9 +232,18 @@ nav button.active {
 <div id="calc-container">
   <div id="line-numbers"><div>1</div></div>
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-  <div id="results"></div>
+  <div id="results-wrapper"><div id="results-drag"></div><div id="results"></div></div>
 </div>
 <div id="tab-lang"><div class="markdown" id="lang-content"></div></div>
+<div id="forex-modal" style="display:none">
+  <div id="forex-backdrop" onclick="document.getElementById('forex-modal').style.display='none'"></div>
+  <div id="forex-dialog">
+    <p>Realtime FOREX data not available.</p>
+    <p>If you would like to see this feature, please consider sponsoring!</p>
+    <a href="https://github.com/sponsors/szatmary" target="_blank" rel="noopener">github.com/sponsors/szatmary</a>
+    <button onclick="document.getElementById('forex-modal').style.display='none'">Close</button>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
@@ -203,6 +266,8 @@ fetch('LANGUAGE.md')
 var editor = document.getElementById('editor');
 var lineNumbers = document.getElementById('line-numbers');
 var resultsDiv = document.getElementById('results');
+var resultsWrapper = document.getElementById('results-wrapper');
+var resultsDrag = document.getElementById('results-drag');
 var nowInterval = null;
 
 function measureMaxChars() {
@@ -217,7 +282,7 @@ function measureMaxChars() {
   if (maxChars > 0) setMaxDisplayLen(maxChars);
 }
 window.addEventListener('resize', measureMaxChars);
-new ResizeObserver(function() { measureMaxChars(); runEval(false); }).observe(resultsDiv);
+new ResizeObserver(function() { measureMaxChars(); runEval(false); }).observe(resultsWrapper);
 
 function runEval(nowTicked) {
   if (typeof evaluate !== 'function') return;
@@ -238,7 +303,9 @@ function runEval(nowTicked) {
   var rHtml = '';
   for (var i = 0; i < results.length; i++) {
     var r = results[i];
-    if (r.isErr) {
+    if (r.isErr && r.text === '__forex__') {
+      rHtml += '<div class="err" style="cursor:pointer" onclick="document.getElementById(\'forex-modal\').style.display=\'block\'">FOREX N/A</div>';
+    } else if (r.isErr) {
       rHtml += '<div class="err">' + escapeHtml(r.text) + '</div>';
     } else {
       rHtml += '<div>' + escapeHtml(r.text) + '</div>';
@@ -282,6 +349,33 @@ editor.addEventListener('scroll', function() {
   lineNumbers.scrollTop = editor.scrollTop;
   resultsDiv.scrollTop = editor.scrollTop;
 });
+
+// --- Drag to resize results gutter ---
+(function() {
+  var dragging = false, startX, startW;
+  resultsDrag.addEventListener('mousedown', function(e) {
+    dragging = true;
+    startX = e.clientX;
+    startW = resultsWrapper.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    var newW = startW - (e.clientX - startX);
+    if (newW < 80) newW = 80;
+    resultsWrapper.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    measureMaxChars();
+    runEval(false);
+  });
+})();
 
 // --- Now() refresh every second ---
 nowInterval = setInterval(function() {

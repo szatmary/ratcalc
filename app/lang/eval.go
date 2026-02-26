@@ -31,13 +31,6 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 	case *NumberLit:
 		return dimless(n.Value), nil
 
-	case *RatioLit:
-		if n.Denom.Sign() == 0 {
-			return CompoundValue{}, &EvalError{Msg: "division by zero in ratio"}
-		}
-		r := new(big.Rat).Quo(n.Num, n.Denom)
-		return dimless(r), nil
-
 	case *VarRef:
 		v, ok := env[n.Name]
 		if !ok {
@@ -83,6 +76,18 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 			return valMul(left, right)
 		case TOKEN_SLASH:
 			return valDiv(left, right)
+		case TOKEN_STARSTAR:
+			return valPow(left, right)
+		case TOKEN_AMP:
+			return valBitwise(left, right, "and")
+		case TOKEN_PIPE:
+			return valBitwise(left, right, "or")
+		case TOKEN_CARET:
+			return valBitwise(left, right, "xor")
+		case TOKEN_LSHIFT:
+			return valShift(left, right, "left")
+		case TOKEN_RSHIFT:
+			return valShift(left, right, "right")
 		default:
 			return CompoundValue{}, &EvalError{Msg: "unknown operator"}
 		}
@@ -95,6 +100,9 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 		if n.Op == TOKEN_MINUS {
 			return valNeg(operand), nil
 		}
+		if n.Op == TOKEN_TILDE {
+			return valBitwiseNot(operand)
+		}
 		return CompoundValue{}, &EvalError{Msg: "unknown unary operator"}
 
 	case *PercentExpr:
@@ -103,9 +111,14 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 			return CompoundValue{}, err
 		}
 		r := new(big.Rat).Quo(val.effectiveRat(), new(big.Rat).SetInt64(100))
-		v := dimless(r)
-		v.Num.Unit = decUnit
-		return v, nil
+		return dimless(r), nil
+
+	case *FactorialExpr:
+		val, err := Eval(n.Expr, env)
+		if err != nil {
+			return CompoundValue{}, err
+		}
+		return valFactorial(val)
 
 	case *UnitExpr:
 		val, err := Eval(n.Expr, env)
@@ -117,6 +130,11 @@ func Eval(node Node, env Env) (CompoundValue, error) {
 			// Already has a unit — convert if compatible
 			if !valCU.Compatible(n.Unit) {
 				return CompoundValue{}, &EvalError{Msg: "cannot convert " + valCU.String() + " to " + n.Unit.String()}
+			}
+			// Block cross-currency conversion (no exchange rates)
+			if valCU.Num.Category == UnitCurrency && n.Unit.Num.Category == UnitCurrency &&
+				valCU.Num.Short != n.Unit.Num.Short {
+				return CompoundValue{}, &EvalError{Msg: "__forex__"}
 			}
 			// Offset-based conversion (temperature)
 			if valCU.HasOffset() || n.Unit.HasOffset() {
@@ -375,13 +393,30 @@ func ratCeil(x *big.Rat) *big.Rat {
 	return new(big.Rat).Neg(ratFloor(new(big.Rat).Neg(x)))
 }
 
-// ratRound returns round(x) with half away from zero.
+// ratRound returns round(x) using banker's rounding (round half to even).
 func ratRound(x *big.Rat) *big.Rat {
+	f := ratFloor(new(big.Rat).Set(x))
+	frac := new(big.Rat).Sub(new(big.Rat).Set(x), f)
 	half := new(big.Rat).SetFrac64(1, 2)
+	cmp := frac.Cmp(half)
 	if x.Sign() >= 0 {
-		return ratFloor(new(big.Rat).Add(x, half))
+		if cmp < 0 {
+			return f
+		}
+		if cmp > 0 {
+			return new(big.Rat).Add(f, new(big.Rat).SetInt64(1))
+		}
+		// Exactly 0.5: round to nearest even
+		floorInt := new(big.Int).Div(f.Num(), f.Denom())
+		if new(big.Int).And(floorInt, big.NewInt(1)).Sign() == 0 {
+			return f // floor is even, keep it
+		}
+		return new(big.Rat).Add(f, new(big.Rat).SetInt64(1))
 	}
-	return ratCeil(new(big.Rat).Sub(x, half))
+	// Negative: work with absolute value
+	absX := new(big.Rat).Neg(x)
+	pos := ratRound(absX)
+	return new(big.Rat).Neg(pos)
 }
 
 func evalRatFunc1(n *FuncCall, env Env, fn func(*big.Rat) *big.Rat) (CompoundValue, error) {
@@ -395,9 +430,7 @@ func evalRatFunc1(n *FuncCall, env Env, fn func(*big.Rat) *big.Rat) (CompoundVal
 	if !val.IsEmpty() {
 		return CompoundValue{}, &EvalError{Msg: n.Name + "() requires a dimensionless value"}
 	}
-	v := dimless(fn(val.effectiveRat()))
-	v.Num.Unit = decUnit
-	return v, nil
+	return dimless(fn(val.effectiveRat())), nil
 }
 
 func evalRatFunc2(n *FuncCall, env Env, fn func(*big.Rat, *big.Rat) *big.Rat) (CompoundValue, error) {
@@ -418,9 +451,7 @@ func evalRatFunc2(n *FuncCall, env Env, fn func(*big.Rat, *big.Rat) *big.Rat) (C
 	if !b.IsEmpty() {
 		return CompoundValue{}, &EvalError{Msg: n.Name + "() requires dimensionless values"}
 	}
-	v := dimless(fn(a.effectiveRat(), b.effectiveRat()))
-	v.Num.Unit = decUnit
-	return v, nil
+	return dimless(fn(a.effectiveRat(), b.effectiveRat())), nil
 }
 
 func evalPow(n *FuncCall, env Env) (CompoundValue, error) {
@@ -458,11 +489,122 @@ func evalPow(n *FuncCall, env Env) (CompoundValue, error) {
 			}
 			r.Inv(r)
 		}
-		v := dimless(r)
-		v.Num.Unit = decUnit
-		return v, nil
+		return dimless(r), nil
 	}
 	return evalMathFunc2(n, env, math.Pow)
+}
+
+// valPow computes left ** right using exact rational arithmetic for integer exponents.
+func valPow(left, right CompoundValue) (CompoundValue, error) {
+	if !left.IsEmpty() {
+		return CompoundValue{}, &EvalError{Msg: "** requires dimensionless values"}
+	}
+	if !right.IsEmpty() {
+		return CompoundValue{}, &EvalError{Msg: "** requires dimensionless values"}
+	}
+	baseR := left.effectiveRat()
+	expR := right.effectiveRat()
+	if expR.IsInt() {
+		e := expR.Num().Int64()
+		neg := e < 0
+		if neg {
+			e = -e
+		}
+		num := new(big.Int).Exp(new(big.Int).Set(baseR.Num()), big.NewInt(e), nil)
+		den := new(big.Int).Exp(new(big.Int).Set(baseR.Denom()), big.NewInt(e), nil)
+		r := new(big.Rat).SetFrac(num, den)
+		if neg {
+			if r.Sign() == 0 {
+				return CompoundValue{}, &EvalError{Msg: "**: division by zero"}
+			}
+			r.Inv(r)
+		}
+		return dimless(r), nil
+	}
+	// Non-integer exponent: use float
+	bf, _ := baseR.Float64()
+	ef, _ := expR.Float64()
+	result := math.Pow(bf, ef)
+	r := new(big.Rat).SetFloat64(result)
+	if r == nil {
+		return CompoundValue{}, &EvalError{Msg: "**: result out of range"}
+	}
+	v := dimless(r)
+	v.Num.Unit = decUnit
+	return v, nil
+}
+
+// valBitwise performs bitwise AND, OR, XOR on two integer values.
+func valBitwise(left, right CompoundValue, op string) (CompoundValue, error) {
+	lr := left.DisplayRat()
+	rr := right.DisplayRat()
+	if !lr.IsInt() || !rr.IsInt() {
+		return CompoundValue{}, &EvalError{Msg: op + " requires integer operands"}
+	}
+	a := new(big.Int).Set(lr.Num())
+	b := new(big.Int).Set(rr.Num())
+	var result *big.Int
+	switch op {
+	case "and":
+		result = new(big.Int).And(a, b)
+	case "or":
+		result = new(big.Int).Or(a, b)
+	case "xor":
+		result = new(big.Int).Xor(a, b)
+	}
+	return dimless(new(big.Rat).SetInt(result)), nil
+}
+
+// valShift performs left/right bit shift.
+func valShift(left, right CompoundValue, dir string) (CompoundValue, error) {
+	lr := left.DisplayRat()
+	rr := right.DisplayRat()
+	if !lr.IsInt() || !rr.IsInt() {
+		return CompoundValue{}, &EvalError{Msg: "shift requires integer operands"}
+	}
+	a := new(big.Int).Set(lr.Num())
+	n := rr.Num().Int64()
+	if n < 0 {
+		return CompoundValue{}, &EvalError{Msg: "shift count must be non-negative"}
+	}
+	var result *big.Int
+	switch dir {
+	case "left":
+		result = new(big.Int).Lsh(a, uint(n))
+	case "right":
+		result = new(big.Int).Rsh(a, uint(n))
+	}
+	return dimless(new(big.Rat).SetInt(result)), nil
+}
+
+// valBitwiseNot performs bitwise NOT (~) on an integer value.
+func valBitwiseNot(val CompoundValue) (CompoundValue, error) {
+	r := val.DisplayRat()
+	if !r.IsInt() {
+		return CompoundValue{}, &EvalError{Msg: "~ requires an integer operand"}
+	}
+	result := new(big.Int).Not(r.Num())
+	return dimless(new(big.Rat).SetInt(result)), nil
+}
+
+// valFactorial computes n! for a non-negative integer.
+func valFactorial(val CompoundValue) (CompoundValue, error) {
+	r := val.DisplayRat()
+	if !r.IsInt() {
+		return CompoundValue{}, &EvalError{Msg: "! requires a non-negative integer"}
+	}
+	n := r.Num().Int64()
+	if r.Sign() < 0 {
+		return CompoundValue{}, &EvalError{Msg: "! requires a non-negative integer"}
+	}
+	if n > 10000 {
+		return CompoundValue{}, &EvalError{Msg: "! argument too large"}
+	}
+	result := new(big.Int).SetInt64(1)
+	for i := int64(2); i <= n; i++ {
+		result.Mul(result, big.NewInt(i))
+	}
+	return dimless(new(big.Rat).SetInt(result)), nil
 }
 
 func evalFuncCall(n *FuncCall, env Env) (CompoundValue, error) {

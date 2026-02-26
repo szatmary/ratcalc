@@ -68,7 +68,9 @@ func collectDepsWalk(node Node, info *DepsInfo) {
 		collectDepsWalk(n.Expr, info)
 	case *PercentExpr:
 		collectDepsWalk(n.Expr, info)
-	case *NumberLit, *RatioLit, *TimeLit:
+	case *FactorialExpr:
+		collectDepsWalk(n.Expr, info)
+	case *NumberLit, *TimeLit:
 		// leaves — no deps
 	}
 }

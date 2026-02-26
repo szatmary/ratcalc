@@ -1,5 +1,7 @@
 package lang
 
+import "unicode/utf8"
+
 // Lex tokenizes a single line of input into a slice of tokens.
 func Lex(input string) []Token {
 	var tokens []Token
@@ -21,8 +23,42 @@ func Lex(input string) []Token {
 			tokens = append(tokens, Token{Type: TOKEN_MINUS, Literal: "-", Pos: i})
 			i++
 		case '*':
-			tokens = append(tokens, Token{Type: TOKEN_STAR, Literal: "*", Pos: i})
+			if i+1 < len(input) && input[i+1] == '*' {
+				tokens = append(tokens, Token{Type: TOKEN_STARSTAR, Literal: "**", Pos: i})
+				i += 2
+			} else {
+				tokens = append(tokens, Token{Type: TOKEN_STAR, Literal: "*", Pos: i})
+				i++
+			}
+		case '&':
+			tokens = append(tokens, Token{Type: TOKEN_AMP, Literal: "&", Pos: i})
 			i++
+		case '|':
+			tokens = append(tokens, Token{Type: TOKEN_PIPE, Literal: "|", Pos: i})
+			i++
+		case '^':
+			tokens = append(tokens, Token{Type: TOKEN_CARET, Literal: "^", Pos: i})
+			i++
+		case '~':
+			tokens = append(tokens, Token{Type: TOKEN_TILDE, Literal: "~", Pos: i})
+			i++
+		case '!':
+			tokens = append(tokens, Token{Type: TOKEN_BANG, Literal: "!", Pos: i})
+			i++
+		case '<':
+			if i+1 < len(input) && input[i+1] == '<' {
+				tokens = append(tokens, Token{Type: TOKEN_LSHIFT, Literal: "<<", Pos: i})
+				i += 2
+			} else {
+				i++ // skip unknown <
+			}
+		case '>':
+			if i+1 < len(input) && input[i+1] == '>' {
+				tokens = append(tokens, Token{Type: TOKEN_RSHIFT, Literal: ">>", Pos: i})
+				i += 2
+			} else {
+				i++ // skip unknown >
+			}
 		case '/':
 			tokens = append(tokens, Token{Type: TOKEN_SLASH, Literal: "/", Pos: i})
 			i++
@@ -46,6 +82,9 @@ func Lex(input string) []Token {
 			i++
 		case '%':
 			tokens = append(tokens, Token{Type: TOKEN_PERCENT, Literal: "%", Pos: i})
+			i++
+		case '$':
+			tokens = append(tokens, Token{Type: TOKEN_CURRENCY, Literal: "$", Pos: i})
 			i++
 		case '@':
 			if end, ok := tryLexAt(input, i); ok {
@@ -105,8 +144,15 @@ func Lex(input string) []Token {
 				}
 				tokens = append(tokens, Token{Type: TOKEN_WORD, Literal: input[start:i], Pos: start})
 			} else {
-				// Unknown character — skip it
-				i++
+				// Check for multi-byte currency symbols: €, £, ¥
+				r, size := utf8.DecodeRuneInString(input[i:])
+				if r == '€' || r == '£' || r == '¥' {
+					tokens = append(tokens, Token{Type: TOKEN_CURRENCY, Literal: string(r), Pos: i})
+					i += size
+				} else {
+					// Unknown character — skip it
+					i += size
+				}
 			}
 		}
 	}

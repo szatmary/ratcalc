@@ -832,3 +832,608 @@ func TestNow(t *testing.T) {
 		t.Errorf("now() = %q, expected UTC format", got)
 	}
 }
+
+func TestExponentiation(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"2 ** 10", "1024"},
+		{"3 ** 3", "27"},
+		{"2 ** 0", "1"},
+		{"2 ** -3", "1/8"},
+		{"3 ** -2", "1/9"},
+		// Right-associative: 2 ** 3 ** 2 = 2 ** 9 = 512
+		{"2 ** 3 ** 2", "512"},
+		{"(2 ** 3) ** 2", "64"},
+		// Negation binds looser than **: -2 ** 2 = -(2**2)
+		{"-2 ** 2", "-4"},
+		{"(-2) ** 2", "4"},
+		// pow() function equivalent
+		{"pow(2, 10)", "1024"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestBitwiseOperations(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		// AND
+		{"0xFF & 0x0F", "15"},
+		{"7 & 3", "3"},
+		{"0 & 255", "0"},
+		// OR
+		{"0x0F | 0xF0", "255"},
+		{"5 | 3", "7"},
+		// XOR
+		{"0xFF ^ 0x0F", "240"},
+		{"5 ^ 3", "6"},
+		// NOT
+		{"~0", "-1"},
+		{"~1", "-2"},
+		{"~(-1)", "0"},
+		// Shifts
+		{"1 << 10", "1024"},
+		{"1024 >> 3", "128"},
+		{"0 << 5", "0"},
+		{"255 >> 8", "0"},
+		// Precedence: & binds tighter than |
+		{"5 & 3 | 8", "9"},
+		{"5 | 3 & 1", "5"},
+		// ^ between & and |
+		{"7 ^ 3 & 1", "6"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+
+	// Errors: non-integer operands
+	errTests := []string{
+		"1.5 & 3",
+		"1/3 | 2",
+		"1.5 ^ 3",
+		"1 << 1.5",
+		"~1.5",
+		"1 << -1",
+	}
+	for _, input := range errTests {
+		env := make(Env)
+		_, err := EvalLine(input, env)
+		if err == nil {
+			t.Errorf("EvalLine(%q) expected error, got nil", input)
+		}
+	}
+}
+
+func TestFactorial(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"0!", "1"},
+		{"1!", "1"},
+		{"5!", "120"},
+		{"10!", "3628800"},
+		{"20!", "2432902008176640000"},
+		// Factorial in expressions
+		{"5! + 1", "121"},
+		{"5! * 2", "240"},
+		// Factorial with parentheses
+		{"(2 + 3)!", "120"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+
+	// Errors
+	errTests := []string{
+		"(-1)!",  // negative
+		"1.5!",   // non-integer
+		"(1/3)!", // fraction
+	}
+	for _, input := range errTests {
+		env := make(Env)
+		_, err := EvalLine(input, env)
+		if err == nil {
+			t.Errorf("EvalLine(%q) expected error, got nil", input)
+		}
+	}
+}
+
+func TestToHMS(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"3661 to hms", "1h 1m 1s"},
+		{"0 to hms", "0s"},
+		{"59 to hms", "59s"},
+		{"60 to hms", "1m 0s"},
+		{"3600 to hms", "1h 0m 0s"},
+		{"90 s to hms", "1m 30s"},
+		{"2.5 hr to hms", "2h 30m 0s"},
+		{"1.5 min to hms", "1m 30s"},
+		{"86400 s to hms", "24h 0m 0s"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestNumFunction(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"num(5 km)", "5"},
+		{"num(10 mi / 1 gal)", "10"},
+		{"num(42)", "42"},
+		{"num(100 C)", "100"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestUnderscoreInVariables(t *testing.T) {
+	env := make(Env)
+	val, err := EvalLine("my_var = 42", env)
+	if err != nil {
+		t.Fatalf("assignment error: %v", err)
+	}
+	if val.String() != "42" {
+		t.Errorf("my_var = 42 gave %q, want 42", val.String())
+	}
+
+	val, err = EvalLine("my_var * 2", env)
+	if err != nil {
+		t.Fatalf("my_var * 2 error: %v", err)
+	}
+	if val.String() != "84" {
+		t.Errorf("my_var * 2 = %q, want 84", val.String())
+	}
+
+	// Variable starting with underscore should fail (must start with letter)
+	_, err = EvalLine("_bad = 5", env)
+	if err == nil {
+		t.Error("expected error for variable starting with underscore")
+	}
+}
+
+func TestComments(t *testing.T) {
+	// Comments are handled by the incremental evaluator, not EvalLine
+	state := &EvalState{}
+
+	lines := []string{
+		"; semicolon comment",
+		"// double-slash comment",
+		"  ; indented comment",
+		"  // indented double-slash",
+		"42",
+	}
+	results := state.EvalAllIncremental(lines, false)
+
+	for i := 0; i < 4; i++ {
+		if results[i].Text != "" {
+			t.Errorf("line %d (%q) expected empty result, got %q", i+1, lines[i], results[i].Text)
+		}
+	}
+	if results[4].Text != "42" {
+		t.Errorf("line 5 expected 42, got %q", results[4].Text)
+	}
+}
+
+func TestVolumeConversions(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantUnit string
+		wantMin  float64
+		wantMax  float64
+	}{
+		{"1 gal to L", "L", 3.785, 3.786},
+		{"1 L to floz", "floz", 33.81, 33.82},
+		{"1 gal to cup", "cup", 15.99, 16.01},
+		{"1 gal to pt", "pt", 7.99, 8.01},
+		{"1 gal to qt", "qt", 3.99, 4.01},
+		{"1000 mL to L", "L", 1.0, 1.0},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		if val.CompoundUnit().String() != tt.wantUnit {
+			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.CompoundUnit(), tt.wantUnit)
+			continue
+		}
+		f, _ := val.DisplayRat().Float64()
+		if f < tt.wantMin || f > tt.wantMax {
+			t.Errorf("EvalLine(%q) = %f, want [%f, %f]", tt.input, f, tt.wantMin, tt.wantMax)
+		}
+	}
+}
+
+func TestWeightConversions(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantUnit string
+		wantMin  float64
+		wantMax  float64
+	}{
+		{"1 kg to lb", "lb", 2.204, 2.205},
+		{"1 lb to oz", "oz", 15.99, 16.01},
+		{"1 kg to g", "g", 1000, 1000},
+		{"1000 mg to g", "g", 1.0, 1.0},
+		{"1 lb to g", "g", 453.59, 453.60},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		if val.CompoundUnit().String() != tt.wantUnit {
+			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.CompoundUnit(), tt.wantUnit)
+			continue
+		}
+		f, _ := val.DisplayRat().Float64()
+		if f < tt.wantMin || f > tt.wantMax {
+			t.Errorf("EvalLine(%q) = %f, want [%f, %f]", tt.input, f, tt.wantMin, tt.wantMax)
+		}
+	}
+}
+
+func TestSubMillimeterUnits(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"1000 nm to um", "1 um"},
+		{"1000 um to mm", "1 mm"},
+		{"1000000 pm to um", "1 um"},
+		{"1 mm to um", "1000 um"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestBitUnits(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"8 bit to B", "1 B"},
+		{"1 B to bit", "8 bit"},
+		{"1 kbit to B", "125 B"},
+		{"1 Mbit to kbit", "1000 kbit"},
+		{"1 KiB to B", "1024 B"},
+		{"1 Kibit to bit", "1024 bit"},
+		{"1 MiB to KiB", "1024 KiB"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestTemperatureConversions(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"100 C to F", "212 F"},
+		{"0 C to F", "32 F"},
+		{"32 F to C", "0 C"},
+		{"212 F to C", "100 C"},
+		{"0 K to C", "-273.15 C"},
+		{"0 K to F", "-459.67 F"},
+		{"100 C to K", "373.15 K"},
+		{"0 C to K", "273.15 K"},
+		{"-40 C to F", "-40 F"},
+		{"-40 F to C", "-40 C"},
+		{"373.15 K to F", "212 F"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestCompoundUnitCancellation(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		// Time cancels: mi/hr * hr = mi
+		{"60 mi / 1 hr * 2 hr", "120 mi"},
+		// Same category cancels to dimensionless
+		{"10 mi / 5 mi", "2"},
+		// Compound conversion
+		{"10 mi / 1 gal to km/L", "10 mi / 1 gal to km/L"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		_ = val.String() // just verify no error
+	}
+
+	// Cross-category compound units should work
+	env := make(Env)
+	val, err := EvalLine("10 V / 1 m", env)
+	if err != nil {
+		t.Fatalf("10 V / 1 m error: %v", err)
+	}
+	if val.CompoundUnit().String() != "V/m" {
+		t.Errorf("10 V / 1 m unit = %q, want V/m", val.CompoundUnit().String())
+	}
+
+	// Incompatible unit operations should error
+	errTests := []string{
+		"5 m * 3 kg",        // two categories in numerator
+		"5 m + 3 kg",        // add incompatible
+		"5 m - 3 kg",        // sub incompatible
+		"5 m + 3",           // add unit and no unit
+		"5 + 3 m",           // add no unit and unit
+		"5 mi/hr + 3 km/L",  // incompatible compound
+	}
+	for _, input := range errTests {
+		env := make(Env)
+		_, err := EvalLine(input, env)
+		if err == nil {
+			t.Errorf("EvalLine(%q) expected error, got nil", input)
+		}
+	}
+}
+
+func TestCompoundUnitConversions(t *testing.T) {
+	tests := []struct {
+		input    string
+		wantUnit string
+		wantMin  float64
+		wantMax  float64
+	}{
+		// Speed
+		{"100 km / 1 hr to mi/hr", "mi/hr", 62.13, 62.14},
+		// Fuel economy
+		{"40 mi / 1 gal to km/L", "km/L", 17.00, 17.01},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		if val.CompoundUnit().String() != tt.wantUnit {
+			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.CompoundUnit(), tt.wantUnit)
+			continue
+		}
+		f, _ := val.DisplayRat().Float64()
+		if f < tt.wantMin || f > tt.wantMax {
+			t.Errorf("EvalLine(%q) = %f, want [%f, %f]", tt.input, f, tt.wantMin, tt.wantMax)
+		}
+	}
+}
+
+func TestAtan2(t *testing.T) {
+	env := make(Env)
+	val, err := EvalLine("atan2(1, 1)", env)
+	if err != nil {
+		t.Fatalf("atan2(1, 1) error: %v", err)
+	}
+	f, _ := val.effectiveRat().Float64()
+	// atan2(1,1) = pi/4 ≈ 0.7854
+	if f < 0.785 || f > 0.786 {
+		t.Errorf("atan2(1, 1) = %f, want ~0.7854", f)
+	}
+}
+
+func TestSpeedOfLightArithmetic(t *testing.T) {
+	env := make(Env)
+
+	// c has units m/s
+	val, err := EvalLine("c", env)
+	if err != nil {
+		t.Fatalf("c error: %v", err)
+	}
+	if val.CompoundUnit().String() != "m/s" {
+		t.Errorf("c unit = %q, want m/s", val.CompoundUnit().String())
+	}
+
+	// c * 1 s = distance in meters
+	val, err = EvalLine("c * 1 s", env)
+	if err != nil {
+		t.Fatalf("c * 1 s error: %v", err)
+	}
+	if val.CompoundUnit().String() != "m" {
+		t.Errorf("c * 1 s unit = %q, want m", val.CompoundUnit().String())
+	}
+	if val.String() != "299792458 m" {
+		t.Errorf("c * 1 s = %q, want 299792458 m", val.String())
+	}
+
+	// c * 1 s to km
+	val, err = EvalLine("c * 1 s to km", env)
+	if err != nil {
+		t.Fatalf("c * 1 s to km error: %v", err)
+	}
+	if val.CompoundUnit().String() != "km" {
+		t.Errorf("c * 1 s to km unit = %q, want km", val.CompoundUnit().String())
+	}
+}
+
+func TestCurrency(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"$50 + $30", "$80.00"},
+		{"$100 * 1.08", "$108.00"},
+		{"€50", "€50.00"},
+		{"£75.50", "£75.50"},
+		{"¥1000", "¥1000.00"},
+		{"50 USD", "$50.00"},
+		{"50 EUR", "€50.00"},
+		{"50 CAD", "50.00 CAD"},
+		{"$(50 + 30)", "$80.00"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+
+	// Error: incompatible units
+	env := make(Env)
+	_, err := EvalLine("$50 + 5 m", env)
+	if err == nil {
+		t.Error("expected error for '$50 + 5 m' (incompatible units)")
+	}
+
+	// Error: cross-currency conversion
+	_, err = EvalLine("$50 to EUR", env)
+	if err == nil {
+		t.Error("expected error for '$50 to EUR' (cross-currency conversion)")
+	}
+	if err != nil && err.Error() != "__forex__" {
+		t.Errorf("expected __forex__ error, got: %v", err)
+	}
+}
+
+func TestBankersRounding(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"round(2.5)", "2"},
+		{"round(3.5)", "4"},
+		{"round(-2.5)", "-2"},
+		{"round(-3.5)", "-4"},
+		{"round(0.5)", "0"},
+		{"round(1.5)", "2"},
+		{"round(4.5)", "4"},
+		{"round(5.5)", "6"},
+		// Non-half values round normally
+		{"round(2.3)", "2"},
+		{"round(2.7)", "3"},
+		{"round(-2.3)", "-2"},
+		{"round(-2.7)", "-3"},
+	}
+	for _, tt := range tests {
+		env := make(Env)
+		val, err := EvalLine(tt.input, env)
+		if err != nil {
+			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
+			continue
+		}
+		got := val.String()
+		if got != tt.want {
+			t.Errorf("EvalLine(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestLineReferences(t *testing.T) {
+	state := &EvalState{}
+	lines := []string{"100", "#1 * 2", "#1 + #2"}
+	results := state.EvalAllIncremental(lines, false)
+
+	if results[0].Text != "100" {
+		t.Errorf("line 1 = %q, want 100", results[0].Text)
+	}
+	if results[1].Text != "200" {
+		t.Errorf("line 2 = %q, want 200", results[1].Text)
+	}
+	if results[2].Text != "300" {
+		t.Errorf("line 3 = %q, want 300", results[2].Text)
+	}
+}

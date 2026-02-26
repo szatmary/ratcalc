@@ -106,9 +106,9 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"1 au to km", "1495978707/10 km"},
 
 		// Percentage
-		{"50%", "0.5"},
+		{"50%", "1/2"},
 		{"100%", "1"},
-		{"10%", "0.1"},
+		{"10%", "1/10"},
 		{"200 * 10%", "20"},
 		{"1000 * 5%", "50"},
 
@@ -143,6 +143,21 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"1 MiB to KiB", "1024 KiB"},
 		{"1 GiB to MiB", "1024 MiB"},
 		{"1 TiB to GiB", "1024 GiB"},
+
+		// Currency
+		{"$50 + $30", "$80.00"},
+		{"$100 * 1.08", "$108.00"},
+		{"€50", "€50.00"},
+		{"£75.50", "£75.50"},
+		{"¥1000", "¥1000.00"},
+		{"50 USD", "$50.00"},
+		{"50 EUR", "€50.00"},
+		{"50 CAD", "50.00 CAD"},
+
+		// Banker's rounding (round half to even)
+		{"round(2.5)", "2"},
+		{"round(-2.5)", "-2"},
+		{"round(-3.5)", "-4"},
 	}
 
 	for _, tt := range exact {

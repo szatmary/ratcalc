@@ -12,12 +12,6 @@ type NumberLit struct {
 	Value *big.Rat
 }
 
-// RatioLit represents a fraction literal like 1/3.
-type RatioLit struct {
-	Num   *big.Rat
-	Denom *big.Rat
-}
-
 // VarRef represents a variable reference (possibly multi-word).
 type VarRef struct {
 	Name string
@@ -25,14 +19,14 @@ type VarRef struct {
 
 // BinaryExpr represents a binary operation.
 type BinaryExpr struct {
-	Op    TokenType // TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH
+	Op    TokenType // TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_STARSTAR, TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_LSHIFT, TOKEN_RSHIFT
 	Left  Node
 	Right Node
 }
 
-// UnaryExpr represents a unary operation (negation).
+// UnaryExpr represents a unary operation (negation or bitwise NOT).
 type UnaryExpr struct {
-	Op      TokenType // TOKEN_MINUS
+	Op      TokenType // TOKEN_MINUS, TOKEN_TILDE
 	Operand Node
 }
 
@@ -73,8 +67,12 @@ type PercentExpr struct {
 	Expr Node
 }
 
+// FactorialExpr wraps an expression with a ! suffix (factorial).
+type FactorialExpr struct {
+	Expr Node
+}
+
 func (*NumberLit) nodeTag()   {}
-func (*RatioLit) nodeTag()    {}
 func (*VarRef) nodeTag()      {}
 func (*BinaryExpr) nodeTag()  {}
 func (*UnaryExpr) nodeTag()   {}
@@ -84,7 +82,8 @@ func (*FuncCall) nodeTag()    {}
 func (*TimeLit) nodeTag()     {}
 func (*TZExpr) nodeTag()      {}
 func (*AMPMExpr) nodeTag()    {}
-func (*PercentExpr) nodeTag() {}
+func (*PercentExpr) nodeTag()   {}
+func (*FactorialExpr) nodeTag() {}
 
 // AMPMExpr wraps a time-producing expression with an AM/PM modifier.
 type AMPMExpr struct {

@@ -7,42 +7,56 @@ right gutter.
 ## Grammar
 
 ```
-line        → assignment | conversion | expression | <empty>
-assignment  → varname "=" ( conversion | expression )
-conversion  → expression "to" ( compound_unit_spec | TIMEZONE | "unix" | "hex" | "bin" | "oct" | "hms" )
+line        → assignment | conversion | bitwise_or | <empty>
+assignment  → varname "=" ( conversion | bitwise_or )
+conversion  → bitwise_or "to" ( compound_unit_spec | TIMEZONE | "unix" | "hex" | "bin" | "oct" | "hms" )
 compound_unit_spec → UNIT ("/" UNIT)?
+bitwise_or  → bitwise_xor ( "|" bitwise_xor )*
+bitwise_xor → bitwise_and ( "^" bitwise_and )*
+bitwise_and → shift ( "&" shift )*
+shift       → expression ( ("<<" | ">>") expression )*
 expression  → term ( ("+" | "-") term )*
 term        → unary ( ("*" | "/") unary )*
-unary       → "-" unary | postfix
-postfix     → primary ( "%" | unit | AMPM? TIMEZONE? )?
-primary     → number | "@" DATESPEC | time | funccall | varname | "#" NUMBER | "(" expression ")"
+unary       → ("-" | "~") unary | exponent
+exponent    → postfix ( "**" unary )?
+postfix     → primary ( "!" | "%" | unit | AMPM? TIMEZONE? )?
+primary     → number | "@" DATESPEC | time | funccall | varname | "#" NUMBER | CURRENCY primary | "(" bitwise_or ")"
 number      → NUMBER ( "." NUMBER )? ( "/" NUMBER )?
 time        → TIME                            // HH:MM or HH:MM:SS
-funccall    → WORD "(" [ expression ("," expression)* ] ")"
+funccall    → WORD "(" [ bitwise_or ("," bitwise_or)* ] ")"
 varname     → WORD                            // single word, starts with letter
 unit        → UNIT                            // matched from known units table
 ```
 
 ## Tokens
 
-| Token     | Pattern                     |
-|-----------|-----------------------------|
-| `NUMBER`  | `[0-9]+` or `0x[0-9a-fA-F]+` or `0b[01]+` or `0o[0-7]+` |
-| `WORD`    | `[a-zA-Z_][a-zA-Z0-9_]*`   |
-| `PLUS`    | `+`                         |
-| `MINUS`   | `-`                         |
-| `STAR`    | `*`                         |
-| `SLASH`   | `/`                         |
-| `LPAREN`  | `(`                         |
-| `RPAREN`  | `)`                         |
-| `EQUALS`  | `=`                         |
-| `DOT`     | `.`                         |
-| `COMMA`   | `,`                         |
-| `PERCENT` | `%`                         |
-| `HASH`    | `#`                         |
-| `AT`      | `@` followed by date/time/number |
-| `TIME`    | `H:MM` or `HH:MM[:SS]`      |
-| `EOF`     |                             |
+| Token      | Pattern                     |
+|------------|-----------------------------|
+| `NUMBER`   | `[0-9]+` or `0x[0-9a-fA-F]+` or `0b[01]+` or `0o[0-7]+` |
+| `WORD`     | `[a-zA-Z_][a-zA-Z0-9_]*`   |
+| `PLUS`     | `+`                         |
+| `MINUS`    | `-`                         |
+| `STAR`     | `*`                         |
+| `BANG`     | `!`                         |
+| `STARSTAR` | `**`                        |
+| `SLASH`    | `/`                         |
+| `AMP`      | `&`                         |
+| `PIPE`     | `\|`                        |
+| `CARET`    | `^`                         |
+| `TILDE`    | `~`                         |
+| `LSHIFT`   | `<<`                        |
+| `RSHIFT`   | `>>`                        |
+| `LPAREN`   | `(`                         |
+| `RPAREN`   | `)`                         |
+| `EQUALS`   | `=`                         |
+| `DOT`      | `.`                         |
+| `COMMA`    | `,`                         |
+| `PERCENT`  | `%`                         |
+| `HASH`     | `#`                         |
+| `AT`       | `@` followed by date/time/number |
+| `CURRENCY` | `$`, `€`, `£`, `¥`           |
+| `TIME`     | `H:MM` or `HH:MM[:SS]`      |
+| `EOF`      |                             |
 
 Whitespace is skipped between tokens.
 
@@ -85,7 +99,7 @@ All numbers are exact rationals. Literals:
 - Octal: `0o77`, `0o755`
 - Decimal: `3.14` (stored as `314/100`, auto-simplified)
 - Fraction: `1/3`, `22/7`
-- Percentage: `50%` = `0.5`, `10%` = `0.1` (divides by 100)
+- Percentage: `50%` = `1/2`, `10%` = `1/10` (divides by 100)
 
 ### Percentage
 
@@ -93,8 +107,8 @@ The `%` suffix divides a value by 100. It binds tighter than arithmetic operator
 so `200 * 10%` evaluates as `200 * 0.1 = 20`.
 
 ```
-50%            → 0.5
-10%            → 0.1
+50%            → 1/2
+10%            → 1/10
 200 * 10%      → 20
 rate = 5%      → 0.05
 1000 * rate    → 50
@@ -268,6 +282,36 @@ Temperature units cannot appear in compound units (no `C/s`).
 | MiB   | mebibytes  | 1048576      |
 | GiB   | gibibytes  | 1073741824   |
 | TiB   | tebibytes  | 1099511627776|
+
+### Currency
+
+Currency values are displayed with 2 decimal places. Currencies with known
+symbols use prefix notation (`$80.00`, `€50.00`); others use suffix (`80.00 CAD`).
+Currency symbols (`$`, `€`, `£`, `¥`) can be used as prefix operators.
+
+All currencies are independent — there are no exchange rate conversions.
+
+| Short | Symbol | Full    |
+|-------|--------|---------|
+| USD   | $      | dollars |
+| EUR   | €      | euros   |
+| GBP   | £      |         |
+| JPY   | ¥      | yen     |
+| CAD   |        |         |
+| AUD   |        |         |
+| CHF   |        |         |
+
+```
+$50 + $30          → $80.00
+$100 * 1.08        → $108.00
+€50                → €50.00
+£75.50             → £75.50
+¥1000              → ¥1000.00
+50 USD             → $50.00
+50 EUR             → €50.00
+50 CAD             → 50.00 CAD  (no symbol, suffix)
+$(50 + 30)         → $80.00
+```
 
 ## Compound Units
 
@@ -503,7 +547,7 @@ Values with units or time flags are rejected.
 | `log2(x)` | 1 | Base-2 logarithm |
 | `ceil(x)` | 1 | Ceiling (round up) |
 | `floor(x)` | 1 | Floor (round down) |
-| `round(x)` | 1 | Round to nearest integer |
+| `round(x)` | 1 | Banker's rounding (round half to even) |
 | `pow(x, y)` | 2 | x raised to the power y |
 | `mod(x, y)` | 2 | Remainder of x / y |
 | `min(x, y)` | 2 | Minimum of x and y |
@@ -541,15 +585,27 @@ pv(0.05, 10, 1000)   → ~7721.73   (present value at 5% for 10 periods)
 
 ## Operators
 
-| Op  | Precedence | Associativity |
-|-----|------------|---------------|
-| `+` | 1          | Left          |
-| `-` | 1          | Left          |
-| `*` | 2          | Left          |
-| `/` | 2          | Left          |
-| `-` (unary) | 3  | Right        |
+| Op  | Precedence | Associativity | Notes |
+|-----|------------|---------------|-------|
+| `\|`  | 1        | Left          | Bitwise OR (integers only) |
+| `^`   | 2        | Left          | Bitwise XOR (integers only) |
+| `&`   | 3        | Left          | Bitwise AND (integers only) |
+| `<<`  | 4        | Left          | Left shift (integers only) |
+| `>>`  | 4        | Left          | Right shift (integers only) |
+| `+`   | 5        | Left          | Addition |
+| `-`   | 5        | Left          | Subtraction |
+| `*`   | 6        | Left          | Multiplication |
+| `/`   | 6        | Left          | Division |
+| `-` (unary) | 7  | Right         | Negation |
+| `~`   | 7        | Right         | Bitwise NOT (integers only) |
+| `**`  | 8        | Right         | Exponentiation |
+| `!`   | 9        | Postfix       | Factorial (non-negative integers only) |
 
 Parentheses override precedence.
+
+Bitwise operations (`&`, `|`, `^`, `~`, `<<`, `>>`) require integer operands.
+`**` uses exact rational arithmetic for integer exponents, float for non-integer.
+`!` computes factorial using exact integer arithmetic (e.g. `20!` = `2432902008176640000`).
 
 ## Comments
 
@@ -644,8 +700,8 @@ day(@2024-06-15)       → 15
 pi                     → 3.141592653589793
 e                      → 2.718281828459045
 c                      → 299792458 m/s
-50%                    → 0.5
-10%                    → 0.1
+50%                    → 1/2
+10%                    → 1/10
 200 * 10%              → 20
 100 C to F             → 212 F
 0 C to K               → 273.15 K
@@ -656,4 +712,21 @@ c                      → 299792458 m/s
 1 kWh to J             → 3600000 J
 fv(0.05, 10, 1000)     → ~12577.89
 pv(0.05, 10, 1000)     → ~7721.73
+2 ** 10                → 1024
+3 ** -2                → 1/9
+0xFF & 0x0F            → 15
+0x0F | 0xF0            → 255
+0xFF ^ 0x0F            → 240
+~0                     → -1
+1 << 10                → 1024
+1024 >> 3              → 128
+5!                     → 120
+10!                    → 3628800
+$50 + $30              → $80.00
+$100 * 1.08            → $108.00
+€50                    → €50.00
+50 USD                 → $50.00
+50 CAD                 → 50.00 CAD
+round(2.5)             → 2  (banker's rounding: half to even)
+round(3.5)             → 4
 ```
