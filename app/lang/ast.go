@@ -39,7 +39,7 @@ type UnaryExpr struct {
 // UnitExpr wraps an expression with a unit annotation.
 type UnitExpr struct {
 	Expr Node
-	Unit *CompoundUnit
+	Unit CompoundUnit
 }
 
 // Assignment represents name = expression.

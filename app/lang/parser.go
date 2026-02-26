@@ -460,34 +460,30 @@ func isTimeProducing(node Node) bool {
 	}
 }
 
-// parseCompoundUnitSpec parses a compound unit like "km/L" or "m*s/kg".
-// Grammar: UNIT (("/" | "*") UNIT)*
-func (p *Parser) parseCompoundUnitSpec() (*CompoundUnit, error) {
+// parseCompoundUnitSpec parses a compound unit like "km/L".
+// Grammar: UNIT ("/" UNIT)?
+func (p *Parser) parseCompoundUnitSpec() (CompoundUnit, error) {
 	if p.peek().Type != TOKEN_WORD {
-		return nil, &EvalError{Msg: "expected unit after 'to'"}
+		return CompoundUnit{}, &EvalError{Msg: "expected unit after 'to'"}
 	}
 	first := p.advance()
 	u := LookupUnit(first.Literal)
 	if u == nil {
-		return nil, &EvalError{Msg: "unknown unit: " + first.Literal}
+		return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + first.Literal}
 	}
-	cu := &CompoundUnit{Num: []*Unit{u}}
+	cu := CompoundUnit{Num: u}
 
-	for p.peek().Type == TOKEN_SLASH || p.peek().Type == TOKEN_STAR {
-		op := p.advance()
+	if p.peek().Type == TOKEN_SLASH {
+		p.advance() // consume '/'
 		if p.peek().Type != TOKEN_WORD {
-			return nil, &EvalError{Msg: "expected unit after '" + op.Literal + "'"}
+			return CompoundUnit{}, &EvalError{Msg: "expected unit after '/'"}
 		}
 		word := p.advance()
-		next := LookupUnit(word.Literal)
-		if next == nil {
-			return nil, &EvalError{Msg: "unknown unit: " + word.Literal}
+		den := LookupUnit(word.Literal)
+		if den == nil {
+			return CompoundUnit{}, &EvalError{Msg: "unknown unit: " + word.Literal}
 		}
-		if op.Type == TOKEN_SLASH {
-			cu.Den = append(cu.Den, next)
-		} else {
-			cu.Num = append(cu.Num, next)
-		}
+		cu.Den = den
 	}
 	return cu, nil
 }

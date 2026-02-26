@@ -2,7 +2,6 @@ package lang
 
 import (
 	"math/big"
-	"strings"
 )
 
 // UnitCategory groups related units.
@@ -32,19 +31,21 @@ type Unit struct {
 	FullPl   string       // full plural name (e.g. "meters")
 	Category UnitCategory
 	// ToBase is the conversion factor: value_in_base = (value + PreOffset) * ToBase
-	ToBase *big.Rat
+	ToBase big.Rat
 	// PreOffset is added before multiplying by ToBase. Used for temperature.
-	// nil means 0.
-	PreOffset *big.Rat
+	// Zero value means no offset.
+	PreOffset big.Rat
 }
 
-// HasOffset returns true if this unit uses an offset-based conversion.
+// HasOffset returns true if this unit uses an offset-based conversion (temperature).
 func (u *Unit) HasOffset() bool {
-	return u.PreOffset != nil && u.PreOffset.Sign() != 0
+	return u.Category == UnitTemperature
 }
 
-func ratFromFrac(num, denom int64) *big.Rat {
-	return new(big.Rat).SetFrac64(num, denom)
+func ratFromFrac(num, denom int64) big.Rat {
+	var r big.Rat
+	r.SetFrac64(num, denom)
+	return r
 }
 
 var allUnits = []*Unit{
@@ -85,7 +86,7 @@ var allUnits = []*Unit{
 	{Short: "gal", Full: "gallon", FullPl: "gallons", Category: UnitVolume, ToBase: ratFromFrac(473176473, 125000)},
 
 	// Temperature (base: kelvin)
-	{Short: "K", Full: "kelvin", FullPl: "kelvin", Category: UnitTemperature, ToBase: ratFromFrac(1, 1), PreOffset: new(big.Rat)},
+	{Short: "K", Full: "kelvin", FullPl: "kelvin", Category: UnitTemperature, ToBase: ratFromFrac(1, 1)},
 	{Short: "C", Full: "celsius", FullPl: "celsius", Category: UnitTemperature, ToBase: ratFromFrac(1, 1), PreOffset: ratFromFrac(27315, 100)},
 	{Short: "F", Full: "fahrenheit", FullPl: "fahrenheit", Category: UnitTemperature, ToBase: ratFromFrac(5, 9), PreOffset: ratFromFrac(45967, 100)},
 
@@ -168,7 +169,7 @@ func SecondsUnit() *Unit {
 var tsUnit = &Unit{Short: "timestamp", Category: UnitTimestamp, ToBase: ratFromFrac(1, 1)}
 
 // TimestampUnit returns a CompoundUnit representing an absolute timestamp.
-func TimestampUnit() *CompoundUnit {
+func TimestampUnit() CompoundUnit {
 	return SimpleUnit(tsUnit)
 }
 
@@ -180,93 +181,75 @@ func Convert(val *big.Rat, from, to *Unit) (*big.Rat, error) {
 	}
 	// val_base = val * from.ToBase
 	// result = val_base / to.ToBase
-	result := new(big.Rat).Mul(val, from.ToBase)
-	result.Quo(result, to.ToBase)
+	result := new(big.Rat).Mul(val, &from.ToBase)
+	result.Quo(result, &to.ToBase)
 	return result, nil
 }
 
-// CompoundUnit represents a compound unit like mi/gal or m*s.
-// A nil *CompoundUnit means dimensionless.
+// CompoundUnit represents a compound unit like mi/gal.
+// The zero value (both nil) represents dimensionless.
 type CompoundUnit struct {
-	Num []*Unit // numerator units
-	Den []*Unit // denominator units
+	Num *Unit // nil = dimensionless numerator
+	Den *Unit // nil = no denominator
 }
 
 // SimpleUnit creates a CompoundUnit from a single unit.
-func SimpleUnit(u *Unit) *CompoundUnit {
-	return &CompoundUnit{Num: []*Unit{u}}
+func SimpleUnit(u *Unit) CompoundUnit {
+	return CompoundUnit{Num: u}
 }
 
-// IsEmpty returns true if there are no units in either num or den.
-func (c *CompoundUnit) IsEmpty() bool {
-	return len(c.Num) == 0 && len(c.Den) == 0
+// IsEmpty returns true if there are no units.
+func (c CompoundUnit) IsEmpty() bool {
+	return c.Num == nil && c.Den == nil
 }
 
 // String formats the compound unit for display.
-// Examples: "m", "m*s", "mi/gal", "m*kg/s*s"
-func (c *CompoundUnit) String() string {
-	if c == nil || c.IsEmpty() {
+func (c CompoundUnit) String() string {
+	if c.IsEmpty() {
 		return ""
 	}
-	var parts []string
-	for _, u := range c.Num {
-		parts = append(parts, u.Short)
+	num := ""
+	if c.Num != nil {
+		num = c.Num.Short
 	}
-	num := strings.Join(parts, "*")
-	if len(c.Den) == 0 {
+	if c.Den == nil {
 		return num
 	}
-	parts = parts[:0]
-	for _, u := range c.Den {
-		parts = append(parts, u.Short)
-	}
-	den := strings.Join(parts, "*")
 	if num == "" {
 		num = "1"
 	}
-	return num + "/" + den
+	return num + "/" + c.Den.Short
 }
 
-// compoundHasOffset returns true if any unit in the compound has a non-zero PreOffset.
-func (c *CompoundUnit) HasOffset() bool {
-	if c == nil {
-		return false
+// HasOffset returns true if any unit in the compound has an offset-based conversion.
+func (c CompoundUnit) HasOffset() bool {
+	if c.Num != nil && c.Num.HasOffset() {
+		return true
 	}
-	for _, u := range c.Num {
-		if u.HasOffset() {
-			return true
-		}
-	}
-	for _, u := range c.Den {
-		if u.HasOffset() {
-			return true
-		}
+	if c.Den != nil && c.Den.HasOffset() {
+		return true
 	}
 	return false
 }
 
 // Compatible checks whether two compound units are compatible for add/sub.
-// They must have the same number of Num and Den units, with matching categories
-// at each position.
-func (c *CompoundUnit) Compatible(other *CompoundUnit) bool {
-	if c == nil && other == nil {
-		return true
-	}
-	if c == nil || other == nil {
+func (c CompoundUnit) Compatible(other CompoundUnit) bool {
+	if !unitPtrCatEqual(c.Num, other.Num) {
 		return false
 	}
-	if len(c.Num) != len(other.Num) || len(c.Den) != len(other.Den) {
+	if !unitPtrCatEqual(c.Den, other.Den) {
 		return false
-	}
-	for i := range c.Num {
-		if c.Num[i].Category != other.Num[i].Category {
-			return false
-		}
-	}
-	for i := range c.Den {
-		if c.Den[i].Category != other.Den[i].Category {
-			return false
-		}
 	}
 	return true
+}
+
+// unitPtrCatEqual checks if two *Unit pointers have the same category (or both nil).
+func unitPtrCatEqual(a, b *Unit) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Category == b.Category
 }

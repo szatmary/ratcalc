@@ -10,7 +10,7 @@ right gutter.
 line        → assignment | conversion | expression | <empty>
 assignment  → varname "=" ( conversion | expression )
 conversion  → expression "to" ( compound_unit_spec | TIMEZONE | "unix" | "hex" | "bin" | "oct" )
-compound_unit_spec → UNIT (("/" | "*") UNIT)*
+compound_unit_spec → UNIT ("/" UNIT)?
 expression  → term ( ("+" | "-") term )*
 term        → unary ( ("*" | "/") unary )*
 unary       → "-" unary | postfix
@@ -432,12 +432,14 @@ Both suffix (`5m`) and full name (`5 meters`) forms are supported.
 
 ## Compound Units
 
-Arithmetic on values with units produces compound units. Units are never
-auto-cancelled — the full dimensional trail is preserved.
+Arithmetic on values with units produces compound units. Each side (numerator
+and denominator) holds at most one unit category. Categories cancel across
+numerator/denominator during multiplication and division.
 
 - **Division** produces ratio units: `10 miles / 1 gallon` → `10 mi/gal`
-- **Multiplication** produces product units: `5 m * 3 s` → `15 m*s`
-- **Same-category division**: `10 mi / 2 mi` → `5 mi/mi` (no cancellation)
+- **Multiplication with cancellation**: `60 mi/hr * 2 hr` → `120 mi` (hr cancels)
+- **Same-category division**: `10 mi / 2 mi` → `5` (mi cancels)
+- **Error**: operations producing >1 category per side (e.g. `5 m * 3 kg`) are errors
 
 ### Bare unit words
 
@@ -446,6 +448,7 @@ of that unit. This means `10 miles / gallon` works naturally:
 
 ```
 10 miles / gallon     → 10 mi/gal
+60 mi/hr * 2 hr       → 120 mi  (time category cancels)
 ```
 
 ### Add/Sub with compound units
@@ -469,10 +472,10 @@ lowest precedence, so the entire expression is evaluated before conversion:
 100 km/hr to mi/hr         → speed conversion
 ```
 
-The target unit spec supports compound units with `*` and `/`:
+The target unit spec supports compound units with `/`:
 
 ```
-compound_unit_spec → UNIT (("/" | "*") UNIT)*
+compound_unit_spec → UNIT ("/" UNIT)?
 ```
 
 Conversion requires compatible dimensions — converting between incompatible
@@ -526,7 +529,7 @@ Results use smart formatting:
   display as a fraction: `1/3`, `22/7`
 - Otherwise display as a decimal (truncated to reasonable precision)
 - Values with units append the unit string: `5 m`, `2.5 kg`, `20 mi/gal`
-- Compound units display as `num/den` with `*` separating multiple units on a side: `m*kg/s*s`
+- Compound units display as `num/den`: `mi/hr`, `km/L`
 
 ## Examples
 
@@ -540,8 +543,8 @@ my variable * 2        → 84
 5 meters + 100 cm      → 6 m
 10 miles / gallon      → 10 mi/gal
 100 mi / 5 gal         → 20 mi/gal
-10 mi / 2 mi           → 5 mi/mi
-5 m * 3 s              → 15 m*s
+10 mi / 2 mi           → 5  (same category cancels)
+60 mi/hr * 2 hr        → 120 mi  (time cancels)
 @2024-01-31            → 2024-01-31 00:00:00 +0000
 @2024-01-31T10:30:00   → 2024-01-31 10:30:00 +0000
 date(2024, 1, 31)      → 2024-01-31 00:00:00 +0000

@@ -193,12 +193,12 @@ func (es *EvalState) EvalAllIncremental(lines []string, nowTicked bool) []EvalRe
 			results[i] = EvalResult{Text: val.String()}
 			if cached.Deps.Assigns != "" {
 				env[cached.Deps.Assigns] = val
-				if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTimestamp() != val.IsTimestamp() {
+				if !ratEqual(oldResult.effectiveRat(), val.effectiveRat()) || oldResult.IsTimestamp() != val.IsTimestamp() || !unitEqual(oldResult, val) {
 					changedVars[cached.Deps.Assigns] = true
 				}
 			}
 			env[lineRef(i)] = val
-			if !ratEqual(oldResult.Rat, val.Rat) || oldResult.IsTimestamp() != val.IsTimestamp() {
+			if !ratEqual(oldResult.effectiveRat(), val.effectiveRat()) || oldResult.IsTimestamp() != val.IsTimestamp() || !unitEqual(oldResult, val) {
 				changedVars[lineRef(i)] = true
 			}
 		}
@@ -219,11 +219,5 @@ func itoa(n int) string {
 }
 
 func ratEqual(a, b *big.Rat) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
 	return a.Cmp(b) == 0
 }

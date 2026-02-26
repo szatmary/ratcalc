@@ -33,8 +33,7 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"5 meters + 100 cm", "6 m"},
 		{"10 miles / gallon", "10 mi/gal"},
 		{"100 mi / 5 gal", "20 mi/gal"},
-		{"10 mi / 2 mi", "5 mi/mi"},
-		{"5 m * 3 s", "15 m*s"},
+		{"10 mi / 2 mi", "5"},
 
 		// Time arithmetic
 		{"@2024-01-31 + 86400 s", "2024-02-01 00:00:00 +0000"},
@@ -233,8 +232,8 @@ func TestLanguageSpecNowArithmetic(t *testing.T) {
 	if val.IsTimestamp() {
 		t.Error("expected duration (not time) from now() - @date")
 	}
-	if val.Unit == nil || val.Unit.String() != "s" {
-		t.Errorf("expected unit 's', got %v", val.Unit)
+	if val.CompoundUnit().String() != "s" {
+		t.Errorf("expected unit 's', got %v", val.CompoundUnit())
 	}
 
 	// now() to unix → positive integer
@@ -245,7 +244,7 @@ func TestLanguageSpecNowArithmetic(t *testing.T) {
 	if val.IsTimestamp() {
 		t.Error("expected IsTime=false after to unix")
 	}
-	if val.Rat.Sign() <= 0 {
+	if val.Sign() <= 0 {
 		t.Errorf("now() to unix = %s, expected positive", val.String())
 	}
 }
@@ -259,8 +258,8 @@ func TestLanguageSpecUnitConversions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("100 km to mi error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "mi" {
-		t.Errorf("100 km to mi: expected unit 'mi', got %v", val.Unit)
+	if val.CompoundUnit().String() != "mi" {
+		t.Errorf("100 km to mi: expected unit 'mi', got %v", val.CompoundUnit())
 	}
 
 	// 40 mi / 1 gal to km/L → unit should be km/L
@@ -268,8 +267,8 @@ func TestLanguageSpecUnitConversions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("40 mi / 1 gal to km/L error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "km/L" {
-		t.Errorf("40 mi / 1 gal to km/L: expected unit 'km/L', got %v", val.Unit)
+	if val.CompoundUnit().String() != "km/L" {
+		t.Errorf("40 mi / 1 gal to km/L: expected unit 'km/L', got %v", val.CompoundUnit())
 	}
 
 	// 5 m + 300 cm to km → should be 8/1000 km = 0.008 km
@@ -277,8 +276,8 @@ func TestLanguageSpecUnitConversions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("5 m + 300 cm to km error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "km" {
-		t.Errorf("5 m + 300 cm to km: expected unit 'km', got %v", val.Unit)
+	if val.CompoundUnit().String() != "km" {
+		t.Errorf("5 m + 300 cm to km: expected unit 'km', got %v", val.CompoundUnit())
 	}
 	got := val.String()
 	if !strings.Contains(got, "km") {
@@ -290,8 +289,8 @@ func TestLanguageSpecUnitConversions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("100 km/hr to mi/hr error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "mi/hr" {
-		t.Errorf("100 km/hr to mi/hr: expected unit 'mi/hr', got %v", val.Unit)
+	if val.CompoundUnit().String() != "mi/hr" {
+		t.Errorf("100 km/hr to mi/hr: expected unit 'mi/hr', got %v", val.CompoundUnit())
 	}
 }
 
@@ -354,11 +353,11 @@ func TestApproxConversions(t *testing.T) {
 			t.Errorf("EvalLine(%q) error: %v", tt.input, err)
 			continue
 		}
-		if val.Unit == nil || val.Unit.String() != tt.wantUnit {
-			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.Unit, tt.wantUnit)
+		if val.CompoundUnit().String() != tt.wantUnit {
+			t.Errorf("EvalLine(%q) unit = %v, want %s", tt.input, val.CompoundUnit(), tt.wantUnit)
 			continue
 		}
-		f, _ := val.Rat.Float64()
+		f, _ := val.DisplayRat().Float64()
 		if f < tt.wantMin || f > tt.wantMax {
 			t.Errorf("EvalLine(%q) = %f, want [%f, %f]", tt.input, f, tt.wantMin, tt.wantMax)
 		}
@@ -374,7 +373,7 @@ func TestFinanceFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fv() error: %v", err)
 	}
-	f, _ := val.Rat.Float64()
+	f, _ := val.effectiveRat().Float64()
 	if math.Abs(f-12577.89) > 1.0 {
 		t.Errorf("fv(0.05, 10, 1000) = %f, want ~12577.89", f)
 	}
@@ -384,7 +383,7 @@ func TestFinanceFunctions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pv() error: %v", err)
 	}
-	f, _ = val.Rat.Float64()
+	f, _ = val.effectiveRat().Float64()
 	if math.Abs(f-7721.73) > 1.0 {
 		t.Errorf("pv(0.05, 10, 1000) = %f, want ~7721.73", f)
 	}

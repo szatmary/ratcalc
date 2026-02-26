@@ -129,11 +129,8 @@ func TestCompoundUnits(t *testing.T) {
 		// Bare unit word implies 1
 		{"10 miles / gallon", "10 mi/gal"},
 
-		// No auto-cancellation
-		{"10 mi / 2 mi", "5 mi/mi"},
-
-		// Multiplication produces compound units
-		{"5 m * 3 s", "15 m*s"},
+		// Same-category cancellation
+		{"10 mi / 2 mi", "5"},
 
 		// Add/sub with compound units
 		{"10 mi / 1 gal + 5 mi / 1 gal", "15 mi/gal"},
@@ -198,8 +195,8 @@ func TestToConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("100 km to mi error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "mi" {
-		t.Errorf("100 km to mi: expected unit 'mi', got %v", val.Unit)
+	if val.CompoundUnit().String() != "mi" {
+		t.Errorf("100 km to mi: expected unit 'mi', got %v", val.CompoundUnit())
 	}
 
 	// 5 m + 300 cm to km — sum is 8m, convert to km
@@ -207,8 +204,8 @@ func TestToConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("5 m + 300 cm to km error: %v", err)
 	}
-	if val.Unit == nil || val.Unit.String() != "km" {
-		t.Errorf("5 m + 300 cm to km: expected unit 'km', got %v", val.Unit)
+	if val.CompoundUnit().String() != "km" {
+		t.Errorf("5 m + 300 cm to km: expected unit 'km', got %v", val.CompoundUnit())
 	}
 
 	// Incompatible units: 5 m to kg
