@@ -275,7 +275,7 @@ function shareLink() {
   if (!text) return;
   var compressed = compress(text);
   var encoded = base64urlEncode(compressed);
-  var url = window.location.origin + window.location.pathname + '?t=' + encoded;
+  var url = 'https://ratcalc.com/?t=' + encoded;
   navigator.clipboard.writeText(url);
   alert('Link copied to clipboard');
 }

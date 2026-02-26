@@ -338,11 +338,11 @@ Extract components from a time value. Returns an integer.
 |-------|------------|---------------|
 | mL    | milliliters| 0.001         |
 | L     | liters     | 1             |
-| floz  | floz       | 29.5735       |
-| cup   | cups       | 236.588       |
-| pt    | pints      | 473.176       |
-| qt    | quarts     | 946.353       |
-| gal   | gallons    | 3785.41       |
+| floz  | floz       | 0.0295735     |
+| cup   | cups       | 0.236588      |
+| pt    | pints      | 0.473176      |
+| qt    | quarts     | 0.946353      |
+| gal   | gallons    | 3.78541       |
 
 ### Temperature
 Temperature conversion is offset-based, not purely multiplicative.
