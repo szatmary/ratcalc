@@ -347,6 +347,7 @@ function tokenClass(type, literal, nextType) {
     case TK.PERCENT: case TK.BANG: case TK.COMMA: case TK.DOT:
       return 'tk-op';
     case TK.WORD:
+      if (literal === 'to') return 'tk-op';
       if (FUNCTIONS.has(literal) && nextType === TK.LPAREN) return 'tk-fn';
       if (cachedIsUnit(literal)) return 'tk-unit';
       return '';
