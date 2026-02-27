@@ -592,15 +592,15 @@ function shareLink() {
   var compressed = compress(text);
   var encoded = base64urlEncode(compressed);
   var url = 'https://ratcalc.com/?t=' + encoded;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(function() {
-      alert('Link copied to clipboard');
-    }, function() {
-      prompt('Copy this link:', url);
-    });
-  } else {
-    prompt('Copy this link:', url);
-  }
+  var ta = document.createElement('textarea');
+  ta.value = url;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  alert('Link copied to clipboard');
 }
 </script>
 <script src="wasm_exec.js"></script>
