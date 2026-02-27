@@ -592,8 +592,15 @@ function shareLink() {
   var compressed = compress(text);
   var encoded = base64urlEncode(compressed);
   var url = 'https://ratcalc.com/?t=' + encoded;
-  navigator.clipboard.writeText(url);
-  alert('Link copied to clipboard');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      alert('Link copied to clipboard');
+    }, function() {
+      prompt('Copy this link:', url);
+    });
+  } else {
+    prompt('Copy this link:', url);
+  }
 }
 </script>
 <script src="wasm_exec.js"></script>
