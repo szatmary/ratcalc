@@ -265,6 +265,7 @@ nav button.active {
   <button onclick="showTab('lang')">Language</button>
   <button onclick="shareLink()">Share</button>
   <button onclick="clearEditor()">Clear</button>
+  <button onclick="clearCache()">Clear Cache</button>
   <button onclick="window.open('https://github.com/szatmary/ratcalc','_blank')">GitHub</button>
 </nav>
 <div id="calc-container">
@@ -496,6 +497,15 @@ function clearEditor() {
   runEval(false);
   updateHighlight();
   editor.focus();
+}
+
+function clearCache() {
+  if (confirm('Clear all cached data and reload?')) {
+    try { localStorage.clear(); } catch(e) {}
+    caches.keys().then(function(names) {
+      names.forEach(function(name) { caches.delete(name); });
+    }).finally(function() { location.reload(true); });
+  }
 }
 
 function escapeHtml(s) {
