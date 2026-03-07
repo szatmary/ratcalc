@@ -187,7 +187,27 @@ func formatRat(r *big.Rat) string {
 		return formatSci(r)
 	}
 
-	// Try fraction form first
+	// For improper fractions (|num| > den), try mixed number form
+	num := new(big.Int).Set(r.Num())
+	den := r.Denom()
+	neg := num.Sign() < 0
+	if neg {
+		num.Neg(num)
+	}
+	if num.Cmp(den) > 0 {
+		whole := new(big.Int).Div(num, den)
+		rem := new(big.Int).Mod(num, den)
+		sign := ""
+		if neg {
+			sign = "-"
+		}
+		mixed := fmt.Sprintf("%s%s %s/%s", sign, whole.String(), rem.String(), den.String())
+		if len(mixed) <= MaxDisplayLen {
+			return mixed
+		}
+	}
+
+	// Try fraction form
 	frac := r.RatString()
 	if len(frac) <= MaxDisplayLen {
 		return frac

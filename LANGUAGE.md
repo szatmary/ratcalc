@@ -617,7 +617,8 @@ produce no output.
 ## Display
 
 Results use smart formatting:
-- Fractions are shown if the result fits in the gutter width (e.g. `1/3`, `500/1001`)
+- Improper fractions are shown as mixed numbers when they fit (e.g. `10/3` displays as `3 1/3`)
+- Proper fractions are shown if the result fits in the gutter width (e.g. `1/3`, `500/1001`)
 - Otherwise displayed as decimal (truncated to 10 significant digits)
 - Very large or very small values use scientific notation (e.g. `1.23e+15`)
 - Values with units append the unit string: `5 m`, `2.5 kg`, `20 mi/gal`

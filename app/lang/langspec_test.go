@@ -103,7 +103,7 @@ func TestLanguageSpecExamples(t *testing.T) {
 		{"c", "299792458 m/s"},
 
 		// AU unit
-		{"1 au to km", "1495978707/10 km"},
+		{"1 au to km", "149597870 7/10 km"},
 
 		// Percentage
 		{"50%", "1/2"},
